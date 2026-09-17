@@ -1,1 +1,0 @@
-# PALLET_TALLY
