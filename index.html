@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#12161A">
-<title>Pallet Tally V1</title>
+<title>Pallet Tally V2</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -475,6 +475,8 @@ select:disabled,option:disabled{color:#5B646C;}
 .mf input:focus,.mf select:focus{outline:none;border-color:var(--amber);}
 .mf input::placeholder{color:var(--text-low);opacity:1;}
 .mf select{font-size:12px;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--text-mid) 50%),linear-gradient(135deg,var(--text-mid) 50%,transparent 50%);background-position:calc(100% - 16px) center,calc(100% - 11px) center;background-size:5px 5px,5px 5px;background-repeat:no-repeat;}
+.mf-morehint{font-family:var(--mono);font-size:10.5px;color:var(--text-low);text-align:center;padding:2px 0 8px;}
+.panel.open .mf-morehint{display:none;}
 .count-hint{font-family:var(--mono);font-size:11px;color:var(--text-low);margin-top:5px;}
 .count-hint b{color:var(--amber);}
 .imp-choices{display:flex;flex-direction:column;gap:8px;margin-top:10px;}
@@ -483,7 +485,7 @@ select:disabled,option:disabled{color:#5B646C;}
 <body>
 <div class="topbar">
   <div class="eyebrow"><span class="dot"></span> OFFLINE · LOCAL DEVICE STORAGE</div>
-  <h1 id="appTitle">Pallet Tally V1</h1>
+  <h1 id="appTitle">Pallet Tally V2</h1>
 </div>
 <div class="screens">
   <!-- ============ COUNT SCREEN ============ -->
@@ -534,8 +536,18 @@ select:disabled,option:disabled{color:#5B646C;}
       </div>
     </div>
 
-    <div class="section-label" style="margin-top:14px;">Pallet Manifests <span class="count" id="manifestSummary">0 / 10</span></div>
-    <div id="manifestHost"></div>
+    <div class="panel" id="manifestPanel" style="margin-top:14px;">
+      <div class="panel-head" data-toggle="manifestPanel">
+        <span class="ttl">Pallet Manifests</span>
+        <span class="sub" id="manifestSummary">0 / 10</span>
+        <span class="twist">&#9654;</span>
+      </div>
+      <div class="panel-body" style="padding:10px 10px 2px;">
+        <div id="manifestHost"></div>
+        <div class="panel-more" id="manifestMore" style="padding-top:10px;"></div>
+        <div class="mf-morehint" id="manifestMoreHint">Tap the header to show Merged Pallet Manifest 2–9</div>
+      </div>
+    </div>
 
     <div class="form-grid">
       <div class="field full">
@@ -682,7 +694,7 @@ select:disabled,option:disabled{color:#5B646C;}
       <span class="zl">Zoom</span>
       <input type="range" id="scanZoom" min="1" max="4" step="0.1" value="1">
     </div>
-    <div class="btn-row"><button class="btn small" id="scanTorchBtn">Torch</button></div>
+    <div class="btn-row"><button class="btn" id="scanTorchBtn" style="min-width:150px;">&#128294; Flash: OFF</button></div>
   </div>
 </div>
 <div class="modal-backdrop" id="modalBackdrop">
@@ -721,7 +733,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 var APP = window.APP = {};
 
 /* ---------------- constants ---------------- */
-var APP_VERSION = 'V1';
+var APP_VERSION = 'V2';
 var MERGED_COUNT = 9;           // Merged Pallet Manifest 1..9
 var PALLET_COUNT_MAX = 40;      // Physical Pallet Count 0..40 (manual entry above)
 var QR_CHUNK = 700;             // characters of payload per QR code
@@ -1272,6 +1284,7 @@ function openScanner(opts){
   $('scanZoomRow').classList.add('hidden');
   scanOnHit = opts.onHit;
   scanActive = true;
+  setTorchUi(false);
   primeAudio();
 
   var oneD = opts.mode !== 'qr';
@@ -1363,6 +1376,10 @@ function setupZoom(track){
 
 function closeScanner(){
   scanActive = false;
+  if(torchOn && scanStream){
+    try { applyTorch(scanStream.getVideoTracks()[0], false).catch(function(){}); } catch(e){}
+  }
+  setTorchUi(false);
   scanOnHit = null;
   if(scanStopLoop){ try { scanStopLoop(); } catch(e){} scanStopLoop = null; }
   if(scanStream){
@@ -1374,16 +1391,79 @@ function closeScanner(){
 }
 APP.closeScanner = closeScanner;
 
+/* ---------------- camera flash ----------------
+   Off at the start of every scan. Phones with several back lenses (e.g. the
+   S24 Ultra) often open a lens with no flash, so if the running camera has no
+   torch we look for a back camera that does and switch to it. */
+var torchOn = false;
+function setTorchUi(on, busy){
+  torchOn = on;
+  var b = $('scanTorchBtn');
+  if(!b) return;
+  b.innerHTML = '&#128294; Flash: ' + (busy ? '\u2026' : (on ? 'ON' : 'OFF'));
+  b.className = 'btn' + (on ? ' primary' : '');
+}
+APP.setTorchUi = setTorchUi;
+
+function trackHasTorch(track){
+  try { var caps = track.getCapabilities ? track.getCapabilities() : {}; return !!caps.torch; }
+  catch(e){ return false; }
+}
+function applyTorch(track, on){
+  return track.applyConstraints({ advanced: [{ torch: on }] });
+}
+function swapToTorchCamera(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return Promise.resolve(null);
+  var current = scanStream ? scanStream.getVideoTracks()[0] : null;
+  var currentId = current && current.getSettings ? current.getSettings().deviceId : '';
+  return navigator.mediaDevices.enumerateDevices().then(function(devs){
+    var cams = devs.filter(function(d){ return d.kind === 'videoinput' && d.deviceId !== currentId; });
+    var back = cams.filter(function(d){ return !/front|user|selfie/i.test(d.label || ''); });
+    var list = back.length ? back : cams;
+    var i = 0;
+    function next(){
+      if(i >= list.length || !scanActive) return null;
+      var dev = list[i++];
+      return navigator.mediaDevices.getUserMedia({ audio: false, video: {
+        deviceId: { exact: dev.deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } } })
+        .then(function(stream){
+          var t = stream.getVideoTracks()[0];
+          if(t && trackHasTorch(t) && scanActive){
+            if(scanStream) scanStream.getTracks().forEach(function(x){ x.stop(); });
+            scanStream = stream;
+            scanVideoEl.srcObject = stream;
+            scanVideoEl.play().catch(function(){});
+            setupZoom(t);
+            return t;
+          }
+          stream.getTracks().forEach(function(x){ x.stop(); });
+          return next();
+        }).catch(next);
+    }
+    /* Release the current lens first — many phones allow only one open camera. */
+    return next();
+  }).catch(function(){ return null; });
+}
+
 function toggleTorch(){
-  if(!scanStream) { toast('Camera not running', true); return; }
+  if(!scanStream){ toast('Camera not running', true); return; }
   var track = scanStream.getVideoTracks()[0];
   if(!track) return;
-  var caps = track.getCapabilities ? track.getCapabilities() : {};
-  if(!caps.torch){ toast('This camera has no torch control', true); return; }
-  var on = !(track.__torchOn);
-  track.applyConstraints({ advanced: [{ torch: on }] }).then(function(){
-    track.__torchOn = on;
-  }).catch(function(){ toast('Torch not available', true); });
+  var want = !torchOn;
+  if(!want){
+    applyTorch(track, false).catch(function(){});
+    setTorchUi(false);
+    return;
+  }
+  setTorchUi(false, true);
+  var ready = trackHasTorch(track) ? Promise.resolve(track)
+    : applyTorch(track, true).then(function(){ return track; }, function(){ return swapToTorchCamera(); });
+  ready.then(function(t){
+    if(!t){ setTorchUi(false); toast('No flash available on this camera', true); return; }
+    return applyTorch(t, true).then(function(){ setTorchUi(true); }, function(){
+      setTorchUi(false); toast('Flash could not be turned on', true);
+    });
+  });
 }
 
 document.addEventListener('DOMContentLoaded', function(){
@@ -2251,7 +2331,7 @@ function scanIcon(){
 /* ---------------- build manifest fields ---------------- */
 function buildFields(){
   var host = $('manifestHost');
-  host.innerHTML = '';
+  host.innerHTML = ''; $('manifestMore').innerHTML = '';
   FIELDS.forEach(function(def, idx){
     state[def.key] = blankField();
     var box = el('div', 'mf' + (idx === 0 ? ' base' : ''));
@@ -2319,7 +2399,10 @@ function buildFields(){
         commitTyped(def.key, fast ? 'Scanner (keyboard)' : 'Manual');
         burst = { start: 0, count: 0 };
         var next = FIELDS[idx + 1];
-        if(next) $('in_' + next.key).focus(); else $('palletCount').focus();
+        if(next){
+          if(idx + 1 >= 2) $('manifestPanel').classList.add('open');
+          $('in_' + next.key).focus();
+        } else $('palletCount').focus();
         return;
       }
       if(e.key.length === 1){
@@ -2332,8 +2415,9 @@ function buildFields(){
       if(up !== inp.value){ inp.value = up; try { inp.setSelectionRange(pos, pos); } catch(e){} }
     });
     inp.addEventListener('change', function(){ commitTyped(def.key, 'Manual'); });
+    inp.addEventListener('focus', function(){ if(idx >= 2) $('manifestPanel').classList.add('open'); });
 
-    host.appendChild(box);
+    (idx < 2 ? host : $('manifestMore')).appendChild(box);
   });
 }
 
@@ -2349,7 +2433,12 @@ function scanInto(def){
       setValue(def.key, v, 'Camera', BC.fromScanner(label, v), label);
       toast(def.label + ' captured' + (label ? ' · ' + label : ''));
       var idx = FIELDS.indexOf(def), next = FIELDS[idx + 1];
-      setTimeout(function(){ if(next && !state[next.key].value) $('in_' + next.key).focus(); }, 50);
+      setTimeout(function(){
+        if(next && !state[next.key].value){
+          if(idx + 1 >= 2) $('manifestPanel').classList.add('open');
+          $('in_' + next.key).focus();
+        }
+      }, 50);
       return true;
     }
   });
@@ -2464,6 +2553,9 @@ function filledCount(){
 function refreshSummary(){
   var n = filledCount();
   $('manifestSummary').textContent = n + ' / ' + FIELDS.length;
+  var hidden = FIELDS.slice(2).filter(function(d){ return state[d.key].value; }).length;
+  $('manifestMoreHint').textContent = 'Tap the header to show Merged Pallet Manifest 2–9'
+    + (hidden ? ' · ' + hidden + ' filled' : '');
   $('palletCountHint').innerHTML = '<b>' + n + '</b> manifest' + (n === 1 ? '' : 's')
     + ' scanned on this delivery · physical count is what is actually on the floor';
 }
@@ -2478,9 +2570,7 @@ function refreshDate(){
 function buildPalletCount(){
   var sel = $('palletCount');
   sel.innerHTML = '';
-  var b = document.createElement('option'); b.value = ''; b.textContent = '— Select count —';
-  sel.appendChild(b);
-  for(var i = 0; i <= C.PALLET_COUNT_MAX; i++){
+  for(var i = 1; i <= C.PALLET_COUNT_MAX; i++){
     var o = document.createElement('option'); o.value = String(i); o.textContent = String(i);
     sel.appendChild(o);
   }
@@ -2501,8 +2591,8 @@ function readPalletCount(){
 }
 function writePalletCount(v){
   v = String(v == null ? '' : v).trim();
-  if(v === ''){ $('palletCount').value = ''; }
-  else if(/^\d+$/.test(v) && Number(v) <= C.PALLET_COUNT_MAX){ $('palletCount').value = String(Number(v)); }
+  if(v === ''){ $('palletCount').value = '1'; $('palletCountManual').value = ''; }
+  else if(/^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= C.PALLET_COUNT_MAX){ $('palletCount').value = String(Number(v)); }
   else { $('palletCount').value = 'manual'; $('palletCountManual').value = v; }
   syncPalletCount();
 }
@@ -2609,6 +2699,7 @@ function loadRecord(r){
     renderField(d.key);
   });
   writePalletCount(r.palletCount);
+  $('manifestPanel').classList.toggle('open', FIELDS.slice(2).some(function(d){ return state[d.key].value; }));
   refreshSummary();
   setEditingChrome(r);
 }
@@ -2622,6 +2713,7 @@ function resetForm(keepDateAndDc){
   refreshDate();
   FIELDS.forEach(function(d){ clearField(d.key); });
   writePalletCount('');
+  $('manifestPanel').classList.remove('open');
   refreshSummary();
   setEditingChrome(null);
   document.querySelector('.screens').scrollTop = 0;
@@ -3056,6 +3148,7 @@ function init(){
   $('appTitle').textContent = 'Pallet Tally ' + C.APP_VERSION;
   buildFields();
   buildPalletCount();
+  writePalletCount('');
   refreshSummary();
 
   $('workDate').value = APP.todayISO();
