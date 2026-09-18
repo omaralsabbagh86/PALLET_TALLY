@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#12161A">
-<title>Pallet Tally V4</title>
+<title>Pallet Tally V5</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -490,7 +490,7 @@ select:disabled,option:disabled{color:#5B646C;}
 <body>
 <div class="topbar">
   <div class="eyebrow"><span class="dot"></span> OFFLINE · LOCAL DEVICE STORAGE</div>
-  <h1 id="appTitle">Pallet Tally V4</h1>
+  <h1 id="appTitle">Pallet Tally V5</h1>
 </div>
 <div class="screens">
   <!-- ============ COUNT SCREEN ============ -->
@@ -569,6 +569,10 @@ select:disabled,option:disabled{color:#5B646C;}
           <input id="palletCountManual" type="number" inputmode="numeric" min="0" max="999" placeholder="Count" class="hidden" style="max-width:110px;">
         </div>
         <div class="count-hint" id="palletCountHint"></div>
+      </div>
+      <div class="field full">
+        <label for="stockHeight">Actual Pallet Stock Height cm</label>
+        <div id="stockHeightHost"></div>
       </div>
       <div class="field full">
         <label for="palletSize">Master Pallet Size cm</label>
@@ -749,7 +753,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 var APP = window.APP = {};
 
 /* ---------------- constants ---------------- */
-var APP_VERSION = 'V4';
+var APP_VERSION = 'V5';
 var MERGED_COUNT = 9;           // Merged Pallet Manifest 1..9
 var PALLET_COUNT_MAX = 40;      // Physical Pallet Count 0..40 (manual entry above)
 var QR_CHUNK = 700;             // characters of payload per QR code
@@ -2340,20 +2344,25 @@ function effType(f){ return f.type === 'Auto' ? (f.detected || BC.detect(f.value
 /* ---------------- dropdown with a manual-entry option ---------------- */
 var MERGE_OPTIONS = ['Full merge', 'Partial merge'];
 var REMARK_OPTIONS = ['Latest data', 'Wrong data'];
+var STOCK_HEIGHT_DEFAULT = '0';
+var STOCK_HEIGHTS = ['0'];
+for(var h = 10; h <= 300; h++) STOCK_HEIGHTS.push(String(h));
 var PALLET_SIZES = ['Large 120 x 100', 'Small 120 x 80'];
 var PALLET_SIZE_DEFAULT = PALLET_SIZES[0];
-function makeChoice(id, options, placeholder, blankLabel){
+function makeChoice(id, options, placeholder, blankLabel, manualFirst){
   var wrap = el('div', 'scanfield choice');
   var sel = document.createElement('select');
   sel.id = id;
   if(blankLabel != null){
     var b = document.createElement('option'); b.value = ''; b.textContent = blankLabel; sel.appendChild(b);
   }
-  options.forEach(function(o){
+  var m = document.createElement('option'); m.value = '__manual'; m.textContent = 'Manual entry…';
+  options.forEach(function(o, i){
+    /* manualFirst puts Manual entry directly under the default value. */
+    if(manualFirst && i === 1) sel.appendChild(m);
     var op = document.createElement('option'); op.value = o; op.textContent = o; sel.appendChild(op);
   });
-  var m = document.createElement('option'); m.value = '__manual'; m.textContent = 'Manual entry…';
-  sel.appendChild(m);
+  if(!manualFirst || options.length < 2) sel.appendChild(m);
   var inp = document.createElement('input');
   inp.id = id + '_manual'; inp.type = 'text'; inp.autocomplete = 'off';
   inp.placeholder = placeholder || 'Type here'; inp.className = 'hidden';
@@ -2462,10 +2471,9 @@ function buildFields(){
         commitTyped(def.key, fast ? 'Scanner (keyboard)' : 'Manual');
         burst = { start: 0, count: 0 };
         var next = FIELDS[idx + 1];
-        if(next){
-          if(idx + 1 >= 2) $('manifestPanel').classList.add('open');
-          $('in_' + next.key).focus();
-        } else $('palletCount').focus();
+        var hidden = next && idx + 1 >= 2 && !$('manifestPanel').classList.contains('open');
+        if(next && !hidden) $('in_' + next.key).focus();
+        else $('palletCount').focus();
         return;
       }
       if(e.key.length === 1){
@@ -2478,7 +2486,7 @@ function buildFields(){
       if(up !== inp.value){ inp.value = up; try { inp.setSelectionRange(pos, pos); } catch(e){} }
     });
     inp.addEventListener('change', function(){ commitTyped(def.key, 'Manual'); });
-    inp.addEventListener('focus', function(){ if(idx >= 2) $('manifestPanel').classList.add('open'); });
+
 
     (idx < 2 ? host : $('manifestMore')).appendChild(box);
   });
@@ -2497,10 +2505,8 @@ function scanInto(def){
       toast(def.label + ' captured' + (label ? ' · ' + label : ''));
       var idx = FIELDS.indexOf(def), next = FIELDS[idx + 1];
       setTimeout(function(){
-        if(next && !state[next.key].value){
-          if(idx + 1 >= 2) $('manifestPanel').classList.add('open');
-          $('in_' + next.key).focus();
-        }
+        var hidden = next && idx + 1 >= 2 && !$('manifestPanel').classList.contains('open');
+        if(next && !hidden && !state[next.key].value) $('in_' + next.key).focus();
       }, 50);
       return true;
     }
@@ -2698,6 +2704,14 @@ function selectDc(empId){
   onDcChange();
 }
 
+/* Expandable panels always return to collapsed on save, reset or clear. */
+function collapsePanels(){
+  ['dcPanel', 'manifestPanel'].forEach(function(id){
+    var p = $(id);
+    if(p) p.classList.remove('open');
+  });
+}
+
 /* ---------------- editing chrome ---------------- */
 function setEditingChrome(rec){
   var banner = $('editBanner');
@@ -2737,6 +2751,7 @@ function collect(){
     manifestCount: filledCount(),
     remark: readChoice('remark'),
     palletCount: readPalletCount(),
+    stockHeight: readChoice('stockHeight') || STOCK_HEIGHT_DEFAULT,
     palletSize: readChoice('palletSize') || PALLET_SIZE_DEFAULT,
     createdAt: editingCreatedAt || now,
     savedAt: now
@@ -2767,9 +2782,10 @@ function loadRecord(r){
     renderField(d.key);
   });
   writeChoice('remark', r.remark || '');
+  writeChoice('stockHeight', r.stockHeight == null || r.stockHeight === '' ? STOCK_HEIGHT_DEFAULT : r.stockHeight);
   writeChoice('palletSize', r.palletSize || PALLET_SIZE_DEFAULT);
   writePalletCount(r.palletCount);
-  $('manifestPanel').classList.toggle('open', FIELDS.slice(2).some(function(d){ return state[d.key].value; }));
+  collapsePanels();
   refreshSummary();
   setEditingChrome(r);
 }
@@ -2783,9 +2799,10 @@ function resetForm(keepDateAndDc){
   refreshDate();
   FIELDS.forEach(function(d){ clearField(d.key); });
   writeChoice('remark', '');
+  writeChoice('stockHeight', STOCK_HEIGHT_DEFAULT);
   writeChoice('palletSize', PALLET_SIZE_DEFAULT);
   writePalletCount('');
-  $('manifestPanel').classList.remove('open');
+  collapsePanels();
   refreshSummary();
   setEditingChrome(null);
   document.querySelector('.screens').scrollTop = 0;
@@ -2805,6 +2822,7 @@ function save(){
     if(!ok) return;
     var wasEdit = !!editingId;
     return DB.putRecord(rec).then(reload).then(function(){
+      collapsePanels();
       toast((wasEdit ? 'Updated' : 'Saved') + ' · ' + rec.manifestCount + ' manifests · '
             + rec.palletCount + ' pallets');
       resetForm(true);
@@ -2863,6 +2881,7 @@ function openRecord(r){
   add('DC employee', r.dcEmpName ? r.dcEmpName + ' · ' + r.dcEmpId : r.dcEmpId);
   add('Remark', r.remark);
   add('Physical pallet count', r.palletCount);
+  add('Actual pallet stock height cm', r.stockHeight);
   add('Master pallet size cm', r.palletSize);
   add('Manifests scanned', r.manifestCount);
   FIELDS.forEach(function(d){
@@ -2915,7 +2934,7 @@ function exportColumns(){
     if(d.merged) cols.push(d.col + ' Merge Type');
     cols.push(d.col + ' Code Type', d.col + ' Scanned At', d.col + ' Source');
   });
-  cols.push('Manifests Scanned', 'Remark', 'Physical Pallet Count', 'Master Pallet Size cm', 'Created At', 'Saved At');
+  cols.push('Manifests Scanned', 'Remark', 'Physical Pallet Count', 'Actual Pallet Stock Height cm', 'Master Pallet Size cm', 'Created At', 'Saved At');
   return cols;
 }
 function recordRow(r){
@@ -2926,7 +2945,7 @@ function recordRow(r){
     if(d.merged) row.push(m ? (m.merge || 'Full merge') : '');
     row.push(m ? m.type : '', m ? APP.formatDateTime(m.scannedAt) : '', m ? m.source : '');
   });
-  row.push(r.manifestCount || 0, r.remark || '', r.palletCount, r.palletSize || '', APP.formatDateTime(r.createdAt), APP.formatDateTime(r.savedAt));
+  row.push(r.manifestCount || 0, r.remark || '', r.palletCount, r.stockHeight || '', r.palletSize || '', APP.formatDateTime(r.createdAt), APP.formatDateTime(r.savedAt));
   return row;
 }
 function exportRecords(fmt){
@@ -2988,6 +3007,7 @@ function rowsToRecords(rows){
       manifests: manifests, manifestCount: count,
       remark: cell(r, 'Remark'),
       palletCount: cell(r, 'Physical Pallet Count'),
+      stockHeight: cell(r, 'Actual Pallet Stock Height cm') || STOCK_HEIGHT_DEFAULT,
       palletSize: cell(r, 'Master Pallet Size cm') || cell(r, 'Master Pallet Size') || PALLET_SIZE_DEFAULT,
       createdAt: parseStamp(cell(r, 'Created At')) || saved,
       savedAt: saved
@@ -3077,7 +3097,7 @@ function compact(r){
     FIELDS.map(function(d){
       var m = (r.manifests || {})[d.key];
       return m ? [m.value, m.type, m.scannedAt, m.source, m.merge || ''] : 0;
-    }), r.remark || '', r.palletSize || ''];
+    }), r.remark || '', r.palletSize || '', r.stockHeight || ''];
 }
 function expand(a){
   var manifests = {}, count = 0;
@@ -3088,7 +3108,7 @@ function expand(a){
   });
   return { id: a[0], workDate: a[1], workDateDisplay: APP.formatStamp(a[1]), dcEmpId: a[2], dcEmpName: a[3],
            palletCount: a[4], createdAt: a[5], savedAt: a[6], manifests: manifests, manifestCount: count,
-           remark: a[8] || '', palletSize: a[9] || PALLET_SIZE_DEFAULT };
+           remark: a[8] || '', palletSize: a[9] || PALLET_SIZE_DEFAULT, stockHeight: a[10] || STOCK_HEIGHT_DEFAULT };
 }
 
 function exportQr(){
@@ -3231,6 +3251,8 @@ function init(){
   buildFields();
   buildPalletCount();
   $('remarkHost').appendChild(makeChoice('remark', REMARK_OPTIONS, 'Type remark', '— Select remark —'));
+  $('stockHeightHost').appendChild(makeChoice('stockHeight', STOCK_HEIGHTS, 'Enter height in cm', null, true));
+  writeChoice('stockHeight', STOCK_HEIGHT_DEFAULT);
   $('palletSizeHost').appendChild(makeChoice('palletSize', PALLET_SIZES, 'Enter size in cm'));
   writeChoice('palletSize', PALLET_SIZE_DEFAULT);
   writePalletCount('');
