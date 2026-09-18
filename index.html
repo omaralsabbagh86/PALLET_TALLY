@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#12161A">
-<title>Pallet Tally V5</title>
+<title>Pallet Tally V6</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -482,6 +482,10 @@ select:disabled,option:disabled{color:#5B646C;}
 .mf-merge .choice{flex:1;min-width:0;}
 .choice select{flex:1;min-width:0;}
 .choice input{flex:1;min-width:0;}
+.laser-row{display:flex;align-items:center;gap:8px;margin-top:8px;}
+.laser-row .laser-status{font-family:var(--mono);font-size:10.5px;color:var(--text-low);flex:1;min-width:0;}
+.laser-row.on .laser-status{color:var(--amber);}
+.laser-last{font-family:var(--mono);font-size:10.5px;color:var(--text-mid);margin-top:4px;min-height:13px;}
 .count-hint{font-family:var(--mono);font-size:11px;color:var(--text-low);margin-top:5px;}
 .count-hint b{color:var(--amber);}
 .imp-choices{display:flex;flex-direction:column;gap:8px;margin-top:10px;}
@@ -490,7 +494,7 @@ select:disabled,option:disabled{color:#5B646C;}
 <body>
 <div class="topbar">
   <div class="eyebrow"><span class="dot"></span> OFFLINE · LOCAL DEVICE STORAGE</div>
-  <h1 id="appTitle">Pallet Tally V5</h1>
+  <h1 id="appTitle">Pallet Tally V6</h1>
 </div>
 <div class="screens">
   <!-- ============ COUNT SCREEN ============ -->
@@ -573,6 +577,11 @@ select:disabled,option:disabled{color:#5B646C;}
       <div class="field full">
         <label for="stockHeight">Actual Pallet Stock Height cm</label>
         <div id="stockHeightHost"></div>
+        <div class="laser-row">
+          <button class="btn small" id="laserBtn" type="button">Connect laser</button>
+          <span class="laser-status" id="laserStatus">Leica DISTO D2 — optional</span>
+        </div>
+        <div class="laser-last" id="laserLast"></div>
       </div>
       <div class="field full">
         <label for="palletSize">Master Pallet Size cm</label>
@@ -753,7 +762,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 var APP = window.APP = {};
 
 /* ---------------- constants ---------------- */
-var APP_VERSION = 'V5';
+var APP_VERSION = 'V6';
 var MERGED_COUNT = 9;           // Merged Pallet Manifest 1..9
 var PALLET_COUNT_MAX = 40;      // Physical Pallet Count 0..40 (manual entry above)
 var QR_CHUNK = 700;             // characters of payload per QR code
@@ -2315,6 +2324,155 @@ APP.Barcode = { TYPES: TYPES, detect: detect, fromScanner: fromScanner, convert:
 })();
 
 /* ============================================================
+   PALLET TALLY — Leica DISTO D2 over Web Bluetooth
+   ------------------------------------------------------------
+   The D2 family publishes a BLE service whose distance
+   characteristic carries the reading as a 32-bit float in
+   metres (little endian). We subscribe to it and hand each
+   reading to whoever registered a listener.
+   ============================================================ */
+(function(){
+'use strict';
+
+var APP = window.APP;
+
+var DISTO_SERVICE  = '3ab10100-f831-4395-b29d-570977d5bf94';
+var DISTO_DISTANCE = '3ab10101-f831-4395-b29d-570977d5bf94';
+var BATTERY_SERVICE = 0x180f;
+var BATTERY_LEVEL   = 0x2a19;
+
+var device = null, server = null, distChar = null;
+var listeners = [], statusListeners = [];
+var state = 'idle';       /* idle | connecting | connected | lost */
+var statusText = '';
+var wantConnected = false;
+var retries = 0;
+
+function supported(){
+  return !!(navigator.bluetooth && navigator.bluetooth.requestDevice);
+}
+function setState(s, text){
+  state = s;
+  statusText = text || '';
+  statusListeners.forEach(function(fn){
+    try { fn(state, statusText, device && device.name); } catch(e){}
+  });
+}
+
+function emit(metres){
+  listeners.forEach(function(fn){
+    try { fn(metres); } catch(e){}
+  });
+}
+
+function onValue(ev){
+  var dv = ev.target.value;
+  if(!dv || dv.byteLength < 4) return;
+  var m = dv.getFloat32(0, true);          /* little endian, metres */
+  if(!isFinite(m) || m <= 0 || m > 500) return;
+  emit(m);
+}
+
+function onDisconnected(){
+  distChar = null; server = null;
+  if(!wantConnected){ setState('idle', 'Not connected'); return; }
+  /* The D2 drops the link to save battery; reconnect quietly a few times. */
+  if(retries >= 3){ setState('lost', 'Laser disconnected — tap to reconnect'); return; }
+  retries++;
+  setState('connecting', 'Reconnecting to the laser…');
+  setTimeout(function(){
+    if(wantConnected && device) attach(device).catch(function(){
+      setState('lost', 'Laser disconnected — tap to reconnect');
+    });
+  }, 800);
+}
+
+function attach(dev){
+  return dev.gatt.connect().then(function(srv){
+    server = srv;
+    return srv.getPrimaryService(DISTO_SERVICE);
+  }).then(function(service){
+    return service.getCharacteristic(DISTO_DISTANCE);
+  }).then(function(ch){
+    distChar = ch;
+    ch.addEventListener('characteristicvaluechanged', onValue);
+    return ch.startNotifications();
+  }).then(function(){
+    retries = 0;
+    setState('connected', 'Laser ready — press DIST on the device');
+    readBattery();
+  });
+}
+
+function readBattery(){
+  if(!server || !server.getPrimaryService) return;
+  server.getPrimaryService(BATTERY_SERVICE)
+    .then(function(s){ return s.getCharacteristic(BATTERY_LEVEL); })
+    .then(function(c){ return c.readValue(); })
+    .then(function(dv){
+      var pct = dv.getUint8(0);
+      if(state === 'connected') setState('connected', 'Laser ready · battery ' + pct + '%');
+    })
+    .catch(function(){});
+}
+
+function connect(){
+  if(!supported()){
+    setState('idle', 'This browser cannot connect to Bluetooth devices');
+    return Promise.reject(new Error('Web Bluetooth is not available in this browser'));
+  }
+  wantConnected = true;
+  retries = 0;
+  setState('connecting', 'Choose your DISTO in the list…');
+  return navigator.bluetooth.requestDevice({
+    filters: [
+      { services: [DISTO_SERVICE] },
+      { namePrefix: 'DISTO' },
+      { namePrefix: 'Leica' }
+    ],
+    optionalServices: [DISTO_SERVICE, BATTERY_SERVICE]
+  }).then(function(dev){
+    device = dev;
+    dev.addEventListener('gattservicedisconnected', onDisconnected);
+    dev.addEventListener('gattserverdisconnected', onDisconnected);
+    setState('connecting', 'Connecting to ' + (dev.name || 'the laser') + '…');
+    return attach(dev);
+  }).catch(function(err){
+    wantConnected = false;
+    var msg = /cancel|User cancelled|chooser/i.test(err.message || '')
+      ? 'No device selected'
+      : 'Could not connect: ' + (err.message || err);
+    setState('idle', msg);
+    throw err;
+  });
+}
+
+function disconnect(){
+  wantConnected = false;
+  try {
+    if(distChar) distChar.removeEventListener('characteristicvaluechanged', onValue);
+    if(device && device.gatt && device.gatt.connected) device.gatt.disconnect();
+  } catch(e){}
+  distChar = null; server = null;
+  setState('idle', 'Laser disconnected');
+}
+
+APP.Laser = {
+  supported: supported,
+  connect: connect,
+  disconnect: disconnect,
+  isConnected: function(){ return state === 'connected'; },
+  state: function(){ return state; },
+  status: function(){ return statusText; },
+  deviceName: function(){ return device && device.name ? device.name : ''; },
+  onMeasurement: function(fn){ listeners.push(fn); },
+  onStatus: function(fn){ statusListeners.push(fn); },
+  /* exposed for testing without hardware */
+  _feed: function(metres){ emit(metres); }
+};
+})();
+
+/* ============================================================
    PALLET TALLY — count form, records, export / import
    ============================================================ */
 (function(){
@@ -2667,6 +2825,47 @@ function writePalletCount(v){
   syncPalletCount();
 }
 
+/* ---------------- Leica DISTO D2 laser ----------------
+   A reading arrives in metres; the field wants whole centimetres,
+   always rounded up so a part-centimetre never under-reports the load. */
+function metresToCm(m){
+  /* The reading is a 32-bit float, so 3.2 m arrives as 3.2000000476. Settle it
+     on the millimetre the device actually displays, then round the cm up. */
+  var mm = Math.round(m * 1000);
+  return String(Math.ceil(mm / 10));
+}
+function applyLaserReading(m){
+  var cm = metresToCm(m);
+  writeChoice('stockHeight', cm);
+  $('laserLast').textContent = 'Measured ' + m.toFixed(3) + ' m → ' + cm + ' cm · '
+    + APP.formatDateTime(new Date().toISOString());
+  APP.toast('Stock height ' + cm + ' cm');
+  if(Number(cm) > 600) APP.toast('That reading is over 6 m — check what you aimed at', true);
+}
+function setLaserUi(state, text){
+  var btn = $('laserBtn'), row = btn.parentElement;
+  row.classList.toggle('on', state === 'connected');
+  btn.textContent = state === 'connected' ? 'Disconnect laser'
+                  : state === 'connecting' ? 'Connecting…' : 'Connect laser';
+  btn.disabled = state === 'connecting';
+  $('laserStatus').textContent = text || '';
+}
+function initLaser(){
+  var L = APP.Laser;
+  L.onStatus(function(state, text){ setLaserUi(state, text); });
+  L.onMeasurement(applyLaserReading);
+  if(!L.supported()){
+    setLaserUi('idle', 'Bluetooth needs Chrome on Android over https');
+    $('laserBtn').disabled = true;
+    return;
+  }
+  setLaserUi('idle', 'Leica DISTO D2 — optional');
+  $('laserBtn').addEventListener('click', function(){
+    if(L.isConnected()) L.disconnect();
+    else L.connect().catch(function(){ /* status line already says why */ });
+  });
+}
+
 /* ---------------- DC employee ---------------- */
 function refreshDcSelects(){
   var idSel = $('dcIdSelect'), nameSel = $('dcNameSelect');
@@ -2782,6 +2981,7 @@ function loadRecord(r){
     renderField(d.key);
   });
   writeChoice('remark', r.remark || '');
+  $('laserLast').textContent = '';
   writeChoice('stockHeight', r.stockHeight == null || r.stockHeight === '' ? STOCK_HEIGHT_DEFAULT : r.stockHeight);
   writeChoice('palletSize', r.palletSize || PALLET_SIZE_DEFAULT);
   writePalletCount(r.palletCount);
@@ -2800,6 +3000,7 @@ function resetForm(keepDateAndDc){
   FIELDS.forEach(function(d){ clearField(d.key); });
   writeChoice('remark', '');
   writeChoice('stockHeight', STOCK_HEIGHT_DEFAULT);
+  $('laserLast').textContent = '';
   writeChoice('palletSize', PALLET_SIZE_DEFAULT);
   writePalletCount('');
   collapsePanels();
@@ -3253,6 +3454,7 @@ function init(){
   $('remarkHost').appendChild(makeChoice('remark', REMARK_OPTIONS, 'Type remark', '— Select remark —'));
   $('stockHeightHost').appendChild(makeChoice('stockHeight', STOCK_HEIGHTS, 'Enter height in cm', null, true));
   writeChoice('stockHeight', STOCK_HEIGHT_DEFAULT);
+  initLaser();
   $('palletSizeHost').appendChild(makeChoice('palletSize', PALLET_SIZES, 'Enter size in cm'));
   writeChoice('palletSize', PALLET_SIZE_DEFAULT);
   writePalletCount('');
@@ -3308,7 +3510,7 @@ function init(){
     toast('Storage unavailable: ' + e.message, true);
   });
 }
-APP.PT = { state: state, FIELDS: FIELDS, rowsToRecords: rowsToRecords, compact: compact, expand: expand };
+APP.PT = { metresToCm: metresToCm, state: state, FIELDS: FIELDS, rowsToRecords: rowsToRecords, compact: compact, expand: expand };
 
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
 else init();
