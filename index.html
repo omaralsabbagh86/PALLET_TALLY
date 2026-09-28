@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#12161A">
-<title>Pallet Tally V6</title>
+<title>Pallet Tally V7</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -49,7 +49,7 @@ body{display:flex;flex-direction:column;}
 }
 
 /* ---------- Screens ---------- */
-.screens{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px;padding-bottom:96px;}
+.screens{flex:1 1 auto;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px;padding-bottom:128px;}
 .screen{display:none;}
 .screen.active{display:block;animation:fade .18s ease;}
 @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
@@ -482,9 +482,12 @@ select:disabled,option:disabled{color:#5B646C;}
 .mf-merge .choice{flex:1;min-width:0;}
 .choice select{flex:1;min-width:0;}
 .choice input{flex:1;min-width:0;}
-.laser-row{display:flex;align-items:center;gap:8px;margin-top:8px;}
+.laser-row{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;}
 .laser-row .laser-status{font-family:var(--mono);font-size:10.5px;color:var(--text-low);flex:1;min-width:0;}
 .laser-row.on .laser-status{color:var(--amber);}
+.diag-box{background:var(--surface-raised);border:1px solid var(--border);border-radius:8px;
+  padding:10px;font-family:var(--mono);font-size:10.5px;color:var(--text-mid);white-space:pre-wrap;
+  max-height:320px;overflow:auto;word-break:break-all;}
 .laser-last{font-family:var(--mono);font-size:10.5px;color:var(--text-mid);margin-top:4px;min-height:13px;}
 .count-hint{font-family:var(--mono);font-size:11px;color:var(--text-low);margin-top:5px;}
 .count-hint b{color:var(--amber);}
@@ -494,7 +497,7 @@ select:disabled,option:disabled{color:#5B646C;}
 <body>
 <div class="topbar">
   <div class="eyebrow"><span class="dot"></span> OFFLINE · LOCAL DEVICE STORAGE</div>
-  <h1 id="appTitle">Pallet Tally V6</h1>
+  <h1 id="appTitle">Pallet Tally V7</h1>
 </div>
 <div class="screens">
   <!-- ============ COUNT SCREEN ============ -->
@@ -579,6 +582,7 @@ select:disabled,option:disabled{color:#5B646C;}
         <div id="stockHeightHost"></div>
         <div class="laser-row">
           <button class="btn small" id="laserBtn" type="button">Connect laser</button>
+          <button class="btn small ghost" id="laserDiagBtn" type="button">Diagnostics</button>
           <span class="laser-status" id="laserStatus">Leica DISTO D2 — optional</span>
         </div>
         <div class="laser-last" id="laserLast"></div>
@@ -762,7 +766,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 var APP = window.APP = {};
 
 /* ---------------- constants ---------------- */
-var APP_VERSION = 'V6';
+var APP_VERSION = 'V7';
 var MERGED_COUNT = 9;           // Merged Pallet Manifest 1..9
 var PALLET_COUNT_MAX = 40;      // Physical Pallet Count 0..40 (manual entry above)
 var QR_CHUNK = 700;             // characters of payload per QR code
@@ -2324,82 +2328,147 @@ APP.Barcode = { TYPES: TYPES, detect: detect, fromScanner: fromScanner, convert:
 })();
 
 /* ============================================================
-   PALLET TALLY — Leica DISTO D2 over Web Bluetooth
+   PALLET TALLY — Leica DISTO over Web Bluetooth
    ------------------------------------------------------------
-   The D2 family publishes a BLE service whose distance
-   characteristic carries the reading as a 32-bit float in
-   metres (little endian). We subscribe to it and hand each
-   reading to whoever registered a listener.
+   Different DISTO revisions put the distance on different
+   characteristics: the documented D2 uses 3ab10101, while the
+   D2-2 does not expose that one at all. So we discover every
+   characteristic the device offers, subscribe to all of them,
+   and lock on to whichever one delivers a plausible distance.
    ============================================================ */
 (function(){
 'use strict';
 
 var APP = window.APP;
 
-var DISTO_SERVICE  = '3ab10100-f831-4395-b29d-570977d5bf94';
-var DISTO_DISTANCE = '3ab10101-f831-4395-b29d-570977d5bf94';
+var DISTO_SERVICE   = '3ab10100-f831-4395-b29d-570977d5bf94';
+var KNOWN_DISTANCE  = '3ab10101-f831-4395-b29d-570977d5bf94';
+/* Web Bluetooth only lets us look at services we name up front. */
+var CANDIDATE_SERVICES = [
+  DISTO_SERVICE,
+  '3ab10200-f831-4395-b29d-570977d5bf94',
+  '3ab10300-f831-4395-b29d-570977d5bf94',
+  '3ab10400-f831-4395-b29d-570977d5bf94',
+  '3ab10500-f831-4395-b29d-570977d5bf94',
+  '3ab10600-f831-4395-b29d-570977d5bf94',
+  0x180f, 0x180a, 0x1800, 0x1801
+];
 var BATTERY_SERVICE = 0x180f;
 var BATTERY_LEVEL   = 0x2a19;
 
-var device = null, server = null, distChar = null;
+var device = null, server = null, subscribed = [];
 var listeners = [], statusListeners = [];
-var state = 'idle';       /* idle | connecting | connected | lost */
-var statusText = '';
-var wantConnected = false;
-var retries = 0;
+var state = 'idle', statusText = '';
+var wantConnected = false, retries = 0;
+var lockedUuid = '';            /* the characteristic that proved to carry the distance */
+var log = [];                   /* diagnostics */
 
-function supported(){
-  return !!(navigator.bluetooth && navigator.bluetooth.requestDevice);
-}
+function supported(){ return !!(navigator.bluetooth && navigator.bluetooth.requestDevice); }
+
 function setState(s, text){
-  state = s;
-  statusText = text || '';
-  statusListeners.forEach(function(fn){
-    try { fn(state, statusText, device && device.name); } catch(e){}
-  });
+  state = s; statusText = text || '';
+  statusListeners.forEach(function(fn){ try { fn(state, statusText, device && device.name); } catch(e){} });
+}
+function note(line){
+  log.push(line);
+  if(log.length > 120) log.shift();
+}
+function hex(dv){
+  var out = [];
+  for(var i = 0; i < dv.byteLength && i < 20; i++){
+    var h = dv.getUint8(i).toString(16);
+    out.push(h.length < 2 ? '0' + h : h);
+  }
+  return out.join(' ');
 }
 
-function emit(metres){
-  listeners.forEach(function(fn){
-    try { fn(metres); } catch(e){}
-  });
+/* Turn raw bytes into metres, trying the encodings a DISTO might use. */
+function toMetres(dv){
+  var cands = [];
+  if(dv.byteLength === 4) cands.push(dv.getFloat32(0, true), dv.getFloat32(0, false));
+  if(dv.byteLength === 8) cands.push(dv.getFloat64(0, true), dv.getFloat64(0, false));
+  if(dv.byteLength >= 4 && dv.byteLength !== 4){
+    try { cands.push(dv.getFloat32(0, true)); } catch(e){}
+  }
+  /* Integer millimetres are the other common form. */
+  if(dv.byteLength === 4) cands.push(dv.getUint32(0, true) / 1000);
+  if(dv.byteLength === 2) cands.push(dv.getUint16(0, true) / 1000);
+  /* Some firmware sends plain text such as "1.847". */
+  try {
+    var txt = new TextDecoder().decode(dv).replace(/[^0-9.\-]/g, '');
+    if(txt && /\d/.test(txt)) cands.push(parseFloat(txt));
+  } catch(e){}
+  for(var i = 0; i < cands.length; i++){
+    var v = cands[i];
+    if(isFinite(v) && v >= 0.05 && v <= 200) return v;
+  }
+  return null;
 }
 
 function onValue(ev){
-  var dv = ev.target.value;
-  if(!dv || dv.byteLength < 4) return;
-  var m = dv.getFloat32(0, true);          /* little endian, metres */
-  if(!isFinite(m) || m <= 0 || m > 500) return;
-  emit(m);
+  var ch = ev.target;
+  var dv = ch.value;
+  if(!dv) return;
+  var uuid = ch.uuid;
+  var m = toMetres(dv);
+  note(uuid.slice(0, 8) + ' · ' + dv.byteLength + 'B · ' + hex(dv) + (m ? ' · ' + m.toFixed(3) + ' m' : ''));
+  if(m == null) return;
+  if(lockedUuid && uuid !== lockedUuid) return;       /* one source only */
+  if(!lockedUuid){
+    lockedUuid = uuid;
+    setState('connected', 'Laser ready · reading ' + uuid.slice(0, 8));
+  }
+  listeners.forEach(function(fn){ try { fn(m); } catch(e){} });
 }
 
-function onDisconnected(){
-  distChar = null; server = null;
-  if(!wantConnected){ setState('idle', 'Not connected'); return; }
-  /* The D2 drops the link to save battery; reconnect quietly a few times. */
-  if(retries >= 3){ setState('lost', 'Laser disconnected — tap to reconnect'); return; }
-  retries++;
-  setState('connecting', 'Reconnecting to the laser…');
-  setTimeout(function(){
-    if(wantConnected && device) attach(device).catch(function(){
-      setState('lost', 'Laser disconnected — tap to reconnect');
+function subscribeAll(){
+  subscribed = [];
+  var found = 0, notifying = 0;
+  return server.getPrimaryServices().catch(function(){ return []; }).then(function(services){
+    var chain = Promise.resolve();
+    services.forEach(function(service){
+      chain = chain.then(function(){
+        return service.getCharacteristics().catch(function(){ return []; });
+      }).then(function(chars){
+        var inner = Promise.resolve();
+        chars.forEach(function(ch){
+          found++;
+          var p = ch.properties || {};
+          note('found ' + ch.uuid.slice(0, 8) + ' in ' + service.uuid.slice(0, 8)
+               + ' [' + (p.read ? 'R' : '') + (p.write ? 'W' : '') + (p.notify ? 'N' : '')
+               + (p.indicate ? 'I' : '') + ']');
+          if(ch.uuid === KNOWN_DISTANCE) lockedUuid = ch.uuid;
+          if(p.notify || p.indicate){
+            inner = inner.then(function(){
+              ch.addEventListener('characteristicvaluechanged', onValue);
+              return ch.startNotifications().then(function(){
+                notifying++; subscribed.push(ch);
+              }, function(){
+                ch.removeEventListener('characteristicvaluechanged', onValue);
+              });
+            });
+          }
+        });
+        return inner;
+      });
     });
-  }, 800);
+    return chain.then(function(){ return { found: found, notifying: notifying }; });
+  });
 }
 
 function attach(dev){
+  lockedUuid = '';
   return dev.gatt.connect().then(function(srv){
     server = srv;
-    return srv.getPrimaryService(DISTO_SERVICE);
-  }).then(function(service){
-    return service.getCharacteristic(DISTO_DISTANCE);
-  }).then(function(ch){
-    distChar = ch;
-    ch.addEventListener('characteristicvaluechanged', onValue);
-    return ch.startNotifications();
-  }).then(function(){
+    setState('connecting', 'Reading the device…');
+    return subscribeAll();
+  }).then(function(info){
     retries = 0;
-    setState('connected', 'Laser ready — press DIST on the device');
+    if(!info.notifying){
+      setState('lost', 'Connected but the laser sends nothing — open Diagnostics');
+      return;
+    }
+    setState('connected', 'Laser ready · press DIST (' + info.notifying + ' channels)');
     readBattery();
   });
 }
@@ -2411,18 +2480,29 @@ function readBattery(){
     .then(function(c){ return c.readValue(); })
     .then(function(dv){
       var pct = dv.getUint8(0);
-      if(state === 'connected') setState('connected', 'Laser ready · battery ' + pct + '%');
-    })
-    .catch(function(){});
+      if(state === 'connected') setState('connected', statusText + ' · battery ' + pct + '%');
+    }).catch(function(){});
+}
+
+function onDisconnected(){
+  subscribed = []; server = null;
+  if(!wantConnected){ setState('idle', 'Not connected'); return; }
+  if(retries >= 3){ setState('lost', 'Laser disconnected — tap to reconnect'); return; }
+  retries++;
+  setState('connecting', 'Reconnecting to the laser…');
+  setTimeout(function(){
+    if(wantConnected && device) attach(device).catch(function(){
+      setState('lost', 'Laser disconnected — tap to reconnect');
+    });
+  }, 900);
 }
 
 function connect(){
   if(!supported()){
     setState('idle', 'This browser cannot connect to Bluetooth devices');
-    return Promise.reject(new Error('Web Bluetooth is not available in this browser'));
+    return Promise.reject(new Error('Web Bluetooth is not available'));
   }
-  wantConnected = true;
-  retries = 0;
+  wantConnected = true; retries = 0; log = [];
   setState('connecting', 'Choose your DISTO in the list…');
   return navigator.bluetooth.requestDevice({
     filters: [
@@ -2430,19 +2510,18 @@ function connect(){
       { namePrefix: 'DISTO' },
       { namePrefix: 'Leica' }
     ],
-    optionalServices: [DISTO_SERVICE, BATTERY_SERVICE]
+    optionalServices: CANDIDATE_SERVICES
   }).then(function(dev){
     device = dev;
-    dev.addEventListener('gattservicedisconnected', onDisconnected);
     dev.addEventListener('gattserverdisconnected', onDisconnected);
     setState('connecting', 'Connecting to ' + (dev.name || 'the laser') + '…');
     return attach(dev);
   }).catch(function(err){
     wantConnected = false;
-    var msg = /cancel|User cancelled|chooser/i.test(err.message || '')
-      ? 'No device selected'
-      : 'Could not connect: ' + (err.message || err);
+    var msg = /cancel|chooser/i.test(err.message || '') ? 'No device selected'
+            : 'Could not connect: ' + (err.message || err);
     setState('idle', msg);
+    note('ERROR ' + (err.message || err));
     throw err;
   });
 }
@@ -2450,10 +2529,13 @@ function connect(){
 function disconnect(){
   wantConnected = false;
   try {
-    if(distChar) distChar.removeEventListener('characteristicvaluechanged', onValue);
+    subscribed.forEach(function(ch){
+      ch.removeEventListener('characteristicvaluechanged', onValue);
+      if(ch.stopNotifications) ch.stopNotifications().catch(function(){});
+    });
     if(device && device.gatt && device.gatt.connected) device.gatt.disconnect();
   } catch(e){}
-  distChar = null; server = null;
+  subscribed = []; server = null;
   setState('idle', 'Laser disconnected');
 }
 
@@ -2461,14 +2543,20 @@ APP.Laser = {
   supported: supported,
   connect: connect,
   disconnect: disconnect,
-  isConnected: function(){ return state === 'connected'; },
+  isConnected: function(){ return state === 'connected' || state === 'lost'; },
   state: function(){ return state; },
   status: function(){ return statusText; },
   deviceName: function(){ return device && device.name ? device.name : ''; },
+  lockedUuid: function(){ return lockedUuid; },
+  unlock: function(){ lockedUuid = ''; },
+  diagnostics: function(){
+    return ['Device: ' + ((device && device.name) || '—'),
+            'State: ' + state + ' — ' + statusText,
+            'Locked on: ' + (lockedUuid || 'nothing yet'), ''].concat(log).join('\n');
+  },
   onMeasurement: function(fn){ listeners.push(fn); },
   onStatus: function(fn){ statusListeners.push(fn); },
-  /* exposed for testing without hardware */
-  _feed: function(metres){ emit(metres); }
+  _feed: function(m){ listeners.forEach(function(fn){ fn(m); }); }
 };
 })();
 
@@ -2850,6 +2938,25 @@ function setLaserUi(state, text){
   btn.disabled = state === 'connecting';
   $('laserStatus').textContent = text || '';
 }
+function showLaserDiagnostics(){
+  var wrap = APP.el('div', 'modal-scroll');
+  var box = APP.el('div', 'diag-box', APP.Laser.diagnostics() || 'Nothing recorded yet.');
+  wrap.appendChild(box);
+  var row = APP.el('div', 'btn-row');
+  var copy = APP.el('button', 'btn small', 'Copy');
+  var relock = APP.el('button', 'btn small ghost', 'Forget locked channel');
+  row.appendChild(copy); row.appendChild(relock);
+  wrap.appendChild(row);
+  copy.addEventListener('click', function(){
+    var text = APP.Laser.diagnostics();
+    if(navigator.clipboard) navigator.clipboard.writeText(text).then(function(){ APP.toast('Copied'); },
+      function(){ APP.toast('Copy failed — select the text instead', true); });
+    else APP.toast('Copy is not available here', true);
+  });
+  relock.addEventListener('click', function(){ APP.Laser.unlock(); APP.toast('Will relearn on the next reading'); });
+  APP.showModal({ title: 'Laser diagnostics', node: wrap, hideOk: true, cancelText: 'Close' });
+}
+
 function initLaser(){
   var L = APP.Laser;
   L.onStatus(function(state, text){ setLaserUi(state, text); });
@@ -2857,9 +2964,11 @@ function initLaser(){
   if(!L.supported()){
     setLaserUi('idle', 'Bluetooth needs Chrome on Android over https');
     $('laserBtn').disabled = true;
+    $('laserDiagBtn').addEventListener('click', showLaserDiagnostics);
     return;
   }
   setLaserUi('idle', 'Leica DISTO D2 — optional');
+  $('laserDiagBtn').addEventListener('click', showLaserDiagnostics);
   $('laserBtn').addEventListener('click', function(){
     if(L.isConnected()) L.disconnect();
     else L.connect().catch(function(){ /* status line already says why */ });
