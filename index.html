@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#12161A">
-<title>Pallet Tally V7</title>
+<title>Pallet Tally V8</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -483,7 +483,7 @@ select:disabled,option:disabled{color:#5B646C;}
 .choice select{flex:1;min-width:0;}
 .choice input{flex:1;min-width:0;}
 .laser-row{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;}
-.laser-row .laser-status{font-family:var(--mono);font-size:10.5px;color:var(--text-low);flex:1;min-width:0;}
+.laser-status{font-family:var(--mono);font-size:10.5px;color:var(--text-low);flex:1;min-width:0;}
 .laser-row.on .laser-status{color:var(--amber);}
 .diag-box{background:var(--surface-raised);border:1px solid var(--border);border-radius:8px;
   padding:10px;font-family:var(--mono);font-size:10.5px;color:var(--text-mid);white-space:pre-wrap;
@@ -497,7 +497,7 @@ select:disabled,option:disabled{color:#5B646C;}
 <body>
 <div class="topbar">
   <div class="eyebrow"><span class="dot"></span> OFFLINE · LOCAL DEVICE STORAGE</div>
-  <h1 id="appTitle">Pallet Tally V7</h1>
+  <h1 id="appTitle">Pallet Tally V8</h1>
 </div>
 <div class="screens">
   <!-- ============ COUNT SCREEN ============ -->
@@ -582,7 +582,6 @@ select:disabled,option:disabled{color:#5B646C;}
         <div id="stockHeightHost"></div>
         <div class="laser-row">
           <button class="btn small" id="laserBtn" type="button">Connect laser</button>
-          <button class="btn small ghost" id="laserDiagBtn" type="button">Diagnostics</button>
           <span class="laser-status" id="laserStatus">Leica DISTO D2 — optional</span>
         </div>
         <div class="laser-last" id="laserLast"></div>
@@ -646,7 +645,23 @@ select:disabled,option:disabled{color:#5B646C;}
       <div class="stat"><div class="n" id="statToday">0</div><div class="l">Today</div></div>
       <div class="stat"><div class="n" id="statPallets">0</div><div class="l">Pallets today</div></div>
     </div>
-    <div class="section-label">Export Records</div>
+    <div class="section-label">Laser Device</div>
+    <div class="panel open" id="laserPanel">
+      <div class="panel-body">
+        <div class="laser-row">
+          <button class="btn small" id="laserBtn2" type="button">Connect laser</button>
+          <button class="btn small ghost" id="laserDiagBtn" type="button">Diagnostics</button>
+        </div>
+        <div class="laser-status" id="laserStatus2" style="margin-top:8px;display:block;">Leica DISTO D2 — optional</div>
+        <div class="laser-last" id="laserLast2"></div>
+        <div class="note" style="margin-top:10px;margin-bottom:0;">
+          Pair the DISTO here once. Measurements then land in <b>Actual Pallet Stock Height cm</b>
+          on the Count page whenever you press DIST.
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label" style="margin-top:22px;">Export Records</div>
     <div class="export-tile">
       <div class="info"><div class="fmt">CSV</div><div class="desc">Comma-separated · Excel / Sheets compatible</div></div>
       <button class="btn primary small" id="expCsv">Export</button>
@@ -766,7 +781,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 var APP = window.APP = {};
 
 /* ---------------- constants ---------------- */
-var APP_VERSION = 'V7';
+var APP_VERSION = 'V8';
 var MERGED_COUNT = 9;           // Merged Pallet Manifest 1..9
 var PALLET_COUNT_MAX = 40;      // Physical Pallet Count 0..40 (manual entry above)
 var QR_CHUNK = 700;             // characters of payload per QR code
@@ -2925,18 +2940,31 @@ function metresToCm(m){
 function applyLaserReading(m){
   var cm = metresToCm(m);
   writeChoice('stockHeight', cm);
-  $('laserLast').textContent = 'Measured ' + m.toFixed(3) + ' m → ' + cm + ' cm · '
+  var line = 'Measured ' + m.toFixed(3) + ' m → ' + cm + ' cm · '
     + APP.formatDateTime(new Date().toISOString());
+  $('laserLast').textContent = line;
+  if($('laserLast2')) $('laserLast2').textContent = line;
   APP.toast('Stock height ' + cm + ' cm');
   if(Number(cm) > 600) APP.toast('That reading is over 6 m — check what you aimed at', true);
 }
 function setLaserUi(state, text){
-  var btn = $('laserBtn'), row = btn.parentElement;
-  row.classList.toggle('on', state === 'connected');
-  btn.textContent = state === 'connected' ? 'Disconnect laser'
-                  : state === 'connecting' ? 'Connecting…' : 'Connect laser';
+  var connected = (state === 'connected' || state === 'lost');
+  /* Count page: only ever offers Connect, and disappears once paired. */
+  var btn = $('laserBtn');
+  btn.classList.toggle('hidden', connected);
+  btn.textContent = state === 'connecting' ? 'Connecting…' : 'Connect laser';
   btn.disabled = state === 'connecting';
+  btn.parentElement.classList.toggle('on', state === 'connected');
   $('laserStatus').textContent = text || '';
+  /* Export page: the full control. */
+  var btn2 = $('laserBtn2');
+  if(btn2){
+    btn2.textContent = connected ? 'Disconnect laser'
+                     : state === 'connecting' ? 'Connecting…' : 'Connect laser';
+    btn2.disabled = state === 'connecting';
+    btn2.className = 'btn small' + (connected ? ' danger' : '');
+    $('laserStatus2').textContent = text || '';
+  }
 }
 function showLaserDiagnostics(){
   var wrap = APP.el('div', 'modal-scroll');
@@ -2961,18 +2989,20 @@ function initLaser(){
   var L = APP.Laser;
   L.onStatus(function(state, text){ setLaserUi(state, text); });
   L.onMeasurement(applyLaserReading);
+  $('laserDiagBtn').addEventListener('click', showLaserDiagnostics);
   if(!L.supported()){
     setLaserUi('idle', 'Bluetooth needs Chrome on Android over https');
     $('laserBtn').disabled = true;
-    $('laserDiagBtn').addEventListener('click', showLaserDiagnostics);
+    $('laserBtn2').disabled = true;
     return;
   }
   setLaserUi('idle', 'Leica DISTO D2 — optional');
-  $('laserDiagBtn').addEventListener('click', showLaserDiagnostics);
-  $('laserBtn').addEventListener('click', function(){
+  function toggle(){
     if(L.isConnected()) L.disconnect();
     else L.connect().catch(function(){ /* status line already says why */ });
-  });
+  }
+  $('laserBtn').addEventListener('click', toggle);
+  $('laserBtn2').addEventListener('click', toggle);
 }
 
 /* ---------------- DC employee ---------------- */
@@ -3018,6 +3048,36 @@ function collapsePanels(){
     var p = $(id);
     if(p) p.classList.remove('open');
   });
+}
+
+/* ---------------- unsaved work guard ----------------
+   A signature of everything the user could have entered. We take one
+   whenever the form reaches a clean state (reset, load, save) and compare
+   against it before anything that would throw the entries away. */
+var cleanSignature = '';
+function formSignature(){
+  var parts = [$('workDate').value, $('dcIdSelect').value, readChoice('remark'),
+               readPalletCount(), readChoice('stockHeight'), readChoice('palletSize')];
+  FIELDS.forEach(function(d){
+    var f = state[d.key] || blankField();
+    parts.push(f.value + '~' + (d.merged && $('mg_' + d.key) ? readChoice('mg_' + d.key) : ''));
+  });
+  return parts.join('|');
+}
+function markClean(){ cleanSignature = formSignature(); }
+function isDirty(){ return formSignature() !== cleanSignature; }
+/* Defaults on their own are never worth a warning. */
+function hasEntries(){
+  return FIELDS.some(function(d){ return state[d.key] && state[d.key].value; })
+      || readChoice('stockHeight') !== STOCK_HEIGHT_DEFAULT
+      || readPalletCount() !== '1'
+      || readChoice('remark') !== ''
+      || readChoice('palletSize') !== PALLET_SIZE_DEFAULT;
+}
+function confirmDiscard(what){
+  if(!isDirty() || !hasEntries()) return Promise.resolve(true);
+  return APP.confirmModal('Unsaved entries',
+    'This delivery has entries that are not saved yet. ' + what, 'Discard them');
 }
 
 /* ---------------- editing chrome ---------------- */
@@ -3097,6 +3157,7 @@ function loadRecord(r){
   collapsePanels();
   refreshSummary();
   setEditingChrome(r);
+  markClean();
 }
 
 function resetForm(keepDateAndDc){
@@ -3115,6 +3176,7 @@ function resetForm(keepDateAndDc){
   collapsePanels();
   refreshSummary();
   setEditingChrome(null);
+  markClean();
   document.querySelector('.screens').scrollTop = 0;
 }
 
@@ -3133,6 +3195,7 @@ function save(){
     var wasEdit = !!editingId;
     return DB.putRecord(rec).then(reload).then(function(){
       collapsePanels();
+      markClean();
       toast((wasEdit ? 'Updated' : 'Saved') + ' · ' + rec.manifestCount + ' manifests · '
             + rec.palletCount + ' pallets');
       resetForm(true);
@@ -3581,7 +3644,13 @@ function init(){
   $('dcQrBtn').addEventListener('click', function(){ Lists.shareAsQr('dc'); });
 
   $('saveBtn').addEventListener('click', save);
-  $('resetBtn').addEventListener('click', function(){ resetForm(false); toast('Form reset'); });
+  $('resetBtn').addEventListener('click', function(){
+    confirmDiscard('Reset the form anyway?').then(function(ok){
+      if(!ok) return;
+      resetForm(false);
+      toast('Form reset');
+    });
+  });
   $('deleteBtn').addEventListener('click', function(){
     var r = records.filter(function(x){ return x.id === editingId; })[0];
     if(r) deleteRecord(r);
@@ -3608,18 +3677,35 @@ function init(){
   });
   wireListsScreen();
 
+  /* Back button and page close: warn before the entries vanish. */
+  try { history.pushState({ pt: 1 }, ''); } catch(e){}
+  window.addEventListener('popstate', function(){
+    if(!isDirty() || !hasEntries()){
+      try { history.pushState({ pt: 1 }, ''); } catch(e){}
+      return;
+    }
+    try { history.pushState({ pt: 1 }, ''); } catch(e){}
+    confirmDiscard('Leave this delivery anyway?').then(function(ok){
+      if(ok){ resetForm(true); toast('Entries discarded'); }
+    });
+  });
+  window.addEventListener('beforeunload', function(e){
+    if(isDirty() && hasEntries()){ e.preventDefault(); e.returnValue = ''; return ''; }
+  });
+
   Lists.onChange(function(){ refreshDcSelects(); renderListsScreen(); });
   Lists.loadAll().then(function(){
     selectDc(Lists.getSetting('lastDc') || '');
     return reload();
   }).then(function(){
+    markClean();
     APP.ready = true;
   }).catch(function(e){
     console.error(e);
     toast('Storage unavailable: ' + e.message, true);
   });
 }
-APP.PT = { metresToCm: metresToCm, state: state, FIELDS: FIELDS, rowsToRecords: rowsToRecords, compact: compact, expand: expand };
+APP.PT = { metresToCm: metresToCm, isDirty: isDirty, hasEntries: hasEntries, state: state, FIELDS: FIELDS, rowsToRecords: rowsToRecords, compact: compact, expand: expand };
 
 if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
 else init();
