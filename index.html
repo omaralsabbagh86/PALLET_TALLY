@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#12161A">
-<title>Pallet Tally V8</title>
+<title>Pallet Tally V9</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -497,7 +497,7 @@ select:disabled,option:disabled{color:#5B646C;}
 <body>
 <div class="topbar">
   <div class="eyebrow"><span class="dot"></span> OFFLINE · LOCAL DEVICE STORAGE</div>
-  <h1 id="appTitle">Pallet Tally V8</h1>
+  <h1 id="appTitle">Pallet Tally V9</h1>
 </div>
 <div class="screens">
   <!-- ============ COUNT SCREEN ============ -->
@@ -781,7 +781,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 var APP = window.APP = {};
 
 /* ---------------- constants ---------------- */
-var APP_VERSION = 'V8';
+var APP_VERSION = 'V9';
 var MERGED_COUNT = 9;           // Merged Pallet Manifest 1..9
 var PALLET_COUNT_MAX = 40;      // Physical Pallet Count 0..40 (manual entry above)
 var QR_CHUNK = 700;             // characters of payload per QR code
@@ -2345,11 +2345,15 @@ APP.Barcode = { TYPES: TYPES, detect: detect, fromScanner: fromScanner, convert:
 /* ============================================================
    PALLET TALLY — Leica DISTO over Web Bluetooth
    ------------------------------------------------------------
-   Different DISTO revisions put the distance on different
-   characteristics: the documented D2 uses 3ab10101, while the
-   D2-2 does not expose that one at all. So we discover every
-   characteristic the device offers, subscribe to all of them,
-   and lock on to whichever one delivers a plausible distance.
+   Revisions differ: the documented D2 puts the distance on
+   3ab10101, the D2-2 does not expose that one at all. So we
+   discover what the device offers and lock on to whichever
+   channel delivers a plausible distance.
+
+   Some Android stacks (seen on MagicOS) accept
+   startNotifications and then never deliver anything. When no
+   reading arrives soon after connecting we fall back to polling
+   the readable characteristics, which works everywhere.
    ============================================================ */
 (function(){
 'use strict';
@@ -2357,8 +2361,6 @@ APP.Barcode = { TYPES: TYPES, detect: detect, fromScanner: fromScanner, convert:
 var APP = window.APP;
 
 var DISTO_SERVICE   = '3ab10100-f831-4395-b29d-570977d5bf94';
-var KNOWN_DISTANCE  = '3ab10101-f831-4395-b29d-570977d5bf94';
-/* Web Bluetooth only lets us look at services we name up front. */
 var CANDIDATE_SERVICES = [
   DISTO_SERVICE,
   '3ab10200-f831-4395-b29d-570977d5bf94',
@@ -2370,121 +2372,169 @@ var CANDIDATE_SERVICES = [
 ];
 var BATTERY_SERVICE = 0x180f;
 var BATTERY_LEVEL   = 0x2a19;
+var CCCD = '00002902-0000-1000-8000-00805f9b34fb';
+/* Distance has been seen on these; try them first. */
+var PREFERRED = ['3ab10101', '3ab10102', '3ab10111', '3ab10121', '3ab10122', '3ab10112'];
+var POLL_MS = 700;
+var POLL_AFTER_MS = 5000;
 
-var device = null, server = null, subscribed = [];
+var device = null, server = null;
+var subscribed = [], readable = [];
 var listeners = [], statusListeners = [];
 var state = 'idle', statusText = '';
 var wantConnected = false, retries = 0;
-var lockedUuid = '';            /* the characteristic that proved to carry the distance */
-var log = [];                   /* diagnostics */
+var lockedUuid = '', gotAny = false;
+var pollTimer = null, pollStarted = false, lastRaw = {};
+var log = [];
 
 function supported(){ return !!(navigator.bluetooth && navigator.bluetooth.requestDevice); }
-
+function isDisto(uuid){ return String(uuid).indexOf('3ab10') === 0; }
+function short(uuid){ return String(uuid).slice(0, 8); }
 function setState(s, text){
   state = s; statusText = text || '';
   statusListeners.forEach(function(fn){ try { fn(state, statusText, device && device.name); } catch(e){} });
 }
-function note(line){
-  log.push(line);
-  if(log.length > 120) log.shift();
-}
+function note(line){ log.push(line); if(log.length > 160) log.shift(); }
 function hex(dv){
   var out = [];
   for(var i = 0; i < dv.byteLength && i < 20; i++){
     var h = dv.getUint8(i).toString(16);
     out.push(h.length < 2 ? '0' + h : h);
   }
-  return out.join(' ');
+  return out.join('');
 }
+function delay(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
 
-/* Turn raw bytes into metres, trying the encodings a DISTO might use. */
+/* Raw bytes to metres, trying the encodings a DISTO might use. */
 function toMetres(dv){
-  var cands = [];
-  if(dv.byteLength === 4) cands.push(dv.getFloat32(0, true), dv.getFloat32(0, false));
-  if(dv.byteLength === 8) cands.push(dv.getFloat64(0, true), dv.getFloat64(0, false));
-  if(dv.byteLength >= 4 && dv.byteLength !== 4){
-    try { cands.push(dv.getFloat32(0, true)); } catch(e){}
-  }
-  /* Integer millimetres are the other common form. */
-  if(dv.byteLength === 4) cands.push(dv.getUint32(0, true) / 1000);
-  if(dv.byteLength === 2) cands.push(dv.getUint16(0, true) / 1000);
-  /* Some firmware sends plain text such as "1.847". */
+  var c = [];
+  if(dv.byteLength === 4){ c.push(dv.getFloat32(0, true), dv.getFloat32(0, false), dv.getUint32(0, true) / 1000); }
+  if(dv.byteLength === 8){ c.push(dv.getFloat64(0, true), dv.getFloat64(0, false)); }
+  if(dv.byteLength === 2){ c.push(dv.getUint16(0, true) / 1000); }
+  if(dv.byteLength > 4){ try { c.push(dv.getFloat32(0, true)); } catch(e){} }
   try {
     var txt = new TextDecoder().decode(dv).replace(/[^0-9.\-]/g, '');
-    if(txt && /\d/.test(txt)) cands.push(parseFloat(txt));
+    if(txt && /\d/.test(txt)) c.push(parseFloat(txt));
   } catch(e){}
-  for(var i = 0; i < cands.length; i++){
-    var v = cands[i];
-    if(isFinite(v) && v >= 0.05 && v <= 200) return v;
+  for(var i = 0; i < c.length; i++){
+    if(isFinite(c[i]) && c[i] >= 0.05 && c[i] <= 200) return c[i];
   }
   return null;
 }
 
-function onValue(ev){
-  var ch = ev.target;
-  var dv = ch.value;
-  if(!dv) return;
-  var uuid = ch.uuid;
+function handleValue(uuid, dv, how){
+  if(!dv || !dv.byteLength) return;
+  var raw = hex(dv);
   var m = toMetres(dv);
-  note(uuid.slice(0, 8) + ' · ' + dv.byteLength + 'B · ' + hex(dv) + (m ? ' · ' + m.toFixed(3) + ' m' : ''));
+  if(how === 'poll'){
+    if(lastRaw[uuid] === raw) return;          /* nothing changed since last poll */
+    lastRaw[uuid] = raw;
+  }
+  note(how + ' ' + short(uuid) + ' ' + dv.byteLength + 'B ' + raw + (m ? ' = ' + m.toFixed(3) + 'm' : ''));
   if(m == null) return;
-  if(lockedUuid && uuid !== lockedUuid) return;       /* one source only */
+  if(lockedUuid && uuid !== lockedUuid) return;
   if(!lockedUuid){
     lockedUuid = uuid;
-    setState('connected', 'Laser ready · reading ' + uuid.slice(0, 8));
+    setState('connected', 'Laser ready · ' + (how === 'poll' ? 'polling ' : 'reading ') + short(uuid));
   }
+  gotAny = true;
   listeners.forEach(function(fn){ try { fn(m); } catch(e){} });
 }
 
-function subscribeAll(){
-  subscribed = [];
-  var found = 0, notifying = 0;
+function onValue(ev){ handleValue(ev.target.uuid, ev.target.value, 'notify'); }
+
+/* Enable notifications one at a time — parallel writes get dropped by some stacks. */
+function subscribeSequentially(chars){
+  var i = 0, ok = 0;
+  function next(){
+    if(i >= chars.length) return Promise.resolve(ok);
+    var ch = chars[i++];
+    ch.addEventListener('characteristicvaluechanged', onValue);
+    return ch.startNotifications().then(function(){
+      ok++; subscribed.push(ch);
+      return ch.getDescriptor(CCCD).then(function(d){ return d.readValue(); }).then(function(dv){
+        note('cccd ' + short(ch.uuid) + ' = ' + hex(dv));
+      }, function(){});
+    }, function(err){
+      ch.removeEventListener('characteristicvaluechanged', onValue);
+      note('notify failed ' + short(ch.uuid) + ': ' + (err.message || err));
+    }).then(function(){
+      return delay(120).then(next);
+    });
+  }
+  return next();
+}
+
+/* Polling fallback for stacks that accept notifications but deliver nothing. */
+function startPolling(){
+  if(pollStarted || !readable.length) return;
+  pollStarted = true;
+  note('polling ' + readable.length + ' characteristics every ' + POLL_MS + 'ms');
+  if(state === 'connected') setState('connected', 'Laser ready · polling mode · press DIST');
+  var idx = 0;
+  pollTimer = setInterval(function(){
+    if(!server || !server.connected){ return; }
+    var list = lockedUuid ? readable.filter(function(c){ return c.uuid === lockedUuid; }) : readable;
+    if(!list.length) return;
+    var ch = list[idx++ % list.length];
+    ch.readValue().then(function(dv){ handleValue(ch.uuid, dv, 'poll'); }, function(){});
+  }, POLL_MS);
+}
+function stopPolling(){
+  if(pollTimer) clearInterval(pollTimer);
+  pollTimer = null; pollStarted = false; lastRaw = {};
+}
+
+function discover(){
+  subscribed = []; readable = [];
   return server.getPrimaryServices().catch(function(){ return []; }).then(function(services){
-    var chain = Promise.resolve();
+    var chain = Promise.resolve(), notifiers = [];
     services.forEach(function(service){
       chain = chain.then(function(){
         return service.getCharacteristics().catch(function(){ return []; });
       }).then(function(chars){
-        var inner = Promise.resolve();
         chars.forEach(function(ch){
-          found++;
           var p = ch.properties || {};
-          note('found ' + ch.uuid.slice(0, 8) + ' in ' + service.uuid.slice(0, 8)
-               + ' [' + (p.read ? 'R' : '') + (p.write ? 'W' : '') + (p.notify ? 'N' : '')
-               + (p.indicate ? 'I' : '') + ']');
-          if(ch.uuid === KNOWN_DISTANCE) lockedUuid = ch.uuid;
-          if(p.notify || p.indicate){
-            inner = inner.then(function(){
-              ch.addEventListener('characteristicvaluechanged', onValue);
-              return ch.startNotifications().then(function(){
-                notifying++; subscribed.push(ch);
-              }, function(){
-                ch.removeEventListener('characteristicvaluechanged', onValue);
-              });
-            });
-          }
+          note('found ' + short(ch.uuid) + ' in ' + short(service.uuid) + ' ['
+               + (p.read ? 'R' : '') + (p.write ? 'W' : '') + (p.notify ? 'N' : '') + (p.indicate ? 'I' : '') + ']');
+          if(!isDisto(ch.uuid)) return;                 /* skip battery/generic noise */
+          if(p.notify || p.indicate) notifiers.push(ch);
+          if(p.read) readable.push(ch);
         });
-        return inner;
       });
     });
-    return chain.then(function(){ return { found: found, notifying: notifying }; });
+    return chain.then(function(){
+      function rank(ch){
+        var i = PREFERRED.indexOf(short(ch.uuid));
+        return i < 0 ? 99 : i;
+      }
+      notifiers.sort(function(a, b){ return rank(a) - rank(b); });
+      readable.sort(function(a, b){ return rank(a) - rank(b); });
+      return subscribeSequentially(notifiers).then(function(ok){
+        return { notifying: ok, readable: readable.length };
+      });
+    });
   });
 }
 
 function attach(dev){
-  lockedUuid = '';
+  lockedUuid = ''; gotAny = false; stopPolling();
   return dev.gatt.connect().then(function(srv){
     server = srv;
     setState('connecting', 'Reading the device…');
-    return subscribeAll();
+    return discover();
   }).then(function(info){
     retries = 0;
-    if(!info.notifying){
-      setState('lost', 'Connected but the laser sends nothing — open Diagnostics');
+    if(!info.notifying && !info.readable){
+      setState('lost', 'Connected but no laser channels found — open Diagnostics');
       return;
     }
     setState('connected', 'Laser ready · press DIST (' + info.notifying + ' channels)');
     readBattery();
+    /* If the stack never delivers a notification, switch to polling. */
+    setTimeout(function(){
+      if(wantConnected && !gotAny && server) startPolling();
+    }, info.notifying ? POLL_AFTER_MS : 300);
   });
 }
 
@@ -2500,7 +2550,7 @@ function readBattery(){
 }
 
 function onDisconnected(){
-  subscribed = []; server = null;
+  subscribed = []; readable = []; server = null; stopPolling();
   if(!wantConnected){ setState('idle', 'Not connected'); return; }
   if(retries >= 3){ setState('lost', 'Laser disconnected — tap to reconnect'); return; }
   retries++;
@@ -2520,11 +2570,7 @@ function connect(){
   wantConnected = true; retries = 0; log = [];
   setState('connecting', 'Choose your DISTO in the list…');
   return navigator.bluetooth.requestDevice({
-    filters: [
-      { services: [DISTO_SERVICE] },
-      { namePrefix: 'DISTO' },
-      { namePrefix: 'Leica' }
-    ],
+    filters: [{ services: [DISTO_SERVICE] }, { namePrefix: 'DISTO' }, { namePrefix: 'Leica' }],
     optionalServices: CANDIDATE_SERVICES
   }).then(function(dev){
     device = dev;
@@ -2543,6 +2589,7 @@ function connect(){
 
 function disconnect(){
   wantConnected = false;
+  stopPolling();
   try {
     subscribed.forEach(function(ch){
       ch.removeEventListener('characteristicvaluechanged', onValue);
@@ -2550,24 +2597,45 @@ function disconnect(){
     });
     if(device && device.gatt && device.gatt.connected) device.gatt.disconnect();
   } catch(e){}
-  subscribed = []; server = null;
+  subscribed = []; readable = []; server = null;
   setState('idle', 'Laser disconnected');
+}
+
+/* Read every candidate once, on demand — used by the diagnostics screen. */
+function readNow(){
+  if(!readable.length) return Promise.resolve(0);
+  var i = 0, n = 0;
+  function next(){
+    if(i >= readable.length) return Promise.resolve(n);
+    var ch = readable[i++];
+    return ch.readValue().then(function(dv){
+      n++;
+      lastRaw[ch.uuid] = null;                 /* force the value through */
+      handleValue(ch.uuid, dv, 'poll');
+    }, function(err){ note('read failed ' + short(ch.uuid)); }).then(next);
+  }
+  return next();
 }
 
 APP.Laser = {
   supported: supported,
   connect: connect,
   disconnect: disconnect,
+  readNow: readNow,
+  forcePolling: function(){ startPolling(); },
+  isPolling: function(){ return pollStarted; },
   isConnected: function(){ return state === 'connected' || state === 'lost'; },
   state: function(){ return state; },
   status: function(){ return statusText; },
   deviceName: function(){ return device && device.name ? device.name : ''; },
   lockedUuid: function(){ return lockedUuid; },
-  unlock: function(){ lockedUuid = ''; },
+  unlock: function(){ lockedUuid = ''; lastRaw = {}; },
   diagnostics: function(){
     return ['Device: ' + ((device && device.name) || '—'),
             'State: ' + state + ' — ' + statusText,
-            'Locked on: ' + (lockedUuid || 'nothing yet'), ''].concat(log).join('\n');
+            'Mode: ' + (pollStarted ? 'polling' : 'notifications')
+              + ' · locked on ' + (lockedUuid ? short(lockedUuid) : 'nothing yet'),
+            ''].concat(log).join('\n');
   },
   onMeasurement: function(fn){ listeners.push(fn); },
   onStatus: function(fn){ statusListeners.push(fn); },
@@ -2972,8 +3040,21 @@ function showLaserDiagnostics(){
   wrap.appendChild(box);
   var row = APP.el('div', 'btn-row');
   var copy = APP.el('button', 'btn small', 'Copy');
+  var readNow = APP.el('button', 'btn small', 'Read now');
+  var poll = APP.el('button', 'btn small ghost', 'Force polling mode');
   var relock = APP.el('button', 'btn small ghost', 'Forget locked channel');
-  row.appendChild(copy); row.appendChild(relock);
+  row.appendChild(copy); row.appendChild(readNow); row.appendChild(poll); row.appendChild(relock);
+  readNow.addEventListener('click', function(){
+    APP.Laser.readNow().then(function(n){
+      box.textContent = APP.Laser.diagnostics();
+      APP.toast(n ? 'Read ' + n + ' channels' : 'Nothing readable — connect first', !n);
+    });
+  });
+  poll.addEventListener('click', function(){
+    APP.Laser.forcePolling();
+    box.textContent = APP.Laser.diagnostics();
+    APP.toast(APP.Laser.isPolling() ? 'Polling mode on' : 'Connect the laser first', !APP.Laser.isPolling());
+  });
   wrap.appendChild(row);
   copy.addEventListener('click', function(){
     var text = APP.Laser.diagnostics();
