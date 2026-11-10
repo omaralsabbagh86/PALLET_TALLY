@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#12161A">
-<title>Pallet Tally V10</title>
+<title>Pallet Tally V11</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -509,7 +509,7 @@ select:disabled,option:disabled{color:#5B646C;}
 <body>
 <div class="topbar">
   <div class="eyebrow"><span class="dot"></span> OFFLINE · LOCAL DEVICE STORAGE</div>
-  <h1 id="appTitle">Pallet Tally V10</h1>
+  <h1 id="appTitle">Pallet Tally V11</h1>
 </div>
 
 <div class="app-banner" id="appBanner">
@@ -813,7 +813,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 var APP = window.APP = {};
 
 /* ---------------- constants ---------------- */
-var APP_VERSION = 'V10';
+var APP_VERSION = 'V11';
 var MERGED_COUNT = 9;           // Merged Pallet Manifest 1..9
 var PALLET_COUNT_MAX = 40;      // Physical Pallet Count 0..40 (manual entry above)
 var QR_CHUNK = 700;             // characters of payload per QR code
@@ -1490,37 +1490,83 @@ function trackHasTorch(track){
   catch(e){ return false; }
 }
 function applyTorch(track, on){
+  if(!track) return Promise.reject(new Error('no camera track'));
   return track.applyConstraints({ advanced: [{ torch: on }] });
 }
-function swapToTorchCamera(){
-  if(!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return Promise.resolve(null);
-  var current = scanStream ? scanStream.getVideoTracks()[0] : null;
-  var currentId = current && current.getSettings ? current.getSettings().deviceId : '';
+
+/* Open a back camera that really can light the torch.
+
+   Android allows one open camera at a time, so the running lens is released
+   before anything else is tried — the previous build probed while the first
+   stream was still live, every attempt failed, and the flash looked absent.
+   getCapabilities() also under-reports torch on some builds, so a lens is
+   judged by whether applyConstraints actually succeeds on it. */
+function findTorchCamera(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices){
+    return Promise.resolve(null);
+  }
+  var previousId = '';
+  try {
+    var cur = scanStream && scanStream.getVideoTracks()[0];
+    if(cur && cur.getSettings) previousId = cur.getSettings().deviceId || '';
+  } catch(e){}
+
+  function release(){
+    if(scanStream){
+      try { scanStream.getTracks().forEach(function(t){ t.stop(); }); } catch(e){}
+      scanStream = null;
+    }
+  }
+  function openDevice(id){
+    var v = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+    if(id) v.deviceId = { exact: id }; else v.facingMode = { ideal: 'environment' };
+    return navigator.mediaDevices.getUserMedia({ audio: false, video: v });
+  }
+  function adopt(stream){
+    scanStream = stream;
+    if(scanVideoEl){
+      scanVideoEl.srcObject = stream;
+      scanVideoEl.play().catch(function(){});
+    }
+    setupZoom(stream.getVideoTracks()[0]);
+    return stream.getVideoTracks()[0];
+  }
+
   return navigator.mediaDevices.enumerateDevices().then(function(devs){
-    var cams = devs.filter(function(d){ return d.kind === 'videoinput' && d.deviceId !== currentId; });
-    var back = cams.filter(function(d){ return !/front|user|selfie/i.test(d.label || ''); });
-    var list = back.length ? back : cams;
+    var cams = devs.filter(function(d){ return d.kind === 'videoinput'; });
+    /* Labels are often blank in an installed app, so a name is only used to
+       push obvious selfie cameras to the back of the queue, never to exclude. */
+    cams.sort(function(a, b){
+      var fa = /front|user|selfie/i.test(a.label || '') ? 1 : 0;
+      var fb = /front|user|selfie/i.test(b.label || '') ? 1 : 0;
+      return fa - fb;
+    });
+    release();
     var i = 0;
     function next(){
-      if(i >= list.length || !scanActive) return null;
-      var dev = list[i++];
-      return navigator.mediaDevices.getUserMedia({ audio: false, video: {
-        deviceId: { exact: dev.deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 } } })
-        .then(function(stream){
-          var t = stream.getVideoTracks()[0];
-          if(t && trackHasTorch(t) && scanActive){
-            if(scanStream) scanStream.getTracks().forEach(function(x){ x.stop(); });
-            scanStream = stream;
-            scanVideoEl.srcObject = stream;
-            scanVideoEl.play().catch(function(){});
-            setupZoom(t);
-            return t;
-          }
+      if(!scanActive) return null;
+      if(i >= cams.length){
+        /* Nothing could light up — put the scanner back on a normal camera. */
+        return openDevice('').then(function(s){ adopt(s); return null; },
+                                   function(){ return null; });
+      }
+      var dev = cams[i++];
+      return openDevice(dev.deviceId).then(function(stream){
+        var t = stream.getVideoTracks()[0];
+        var facing = '';
+        try { facing = (t.getSettings && t.getSettings().facingMode) || ''; } catch(e){}
+        if(facing === 'user' && i < cams.length){
           stream.getTracks().forEach(function(x){ x.stop(); });
           return next();
-        }).catch(next);
+        }
+        return t.applyConstraints({ advanced: [{ torch: true }] }).then(function(){
+          return adopt(stream);
+        }, function(){
+          stream.getTracks().forEach(function(x){ x.stop(); });
+          return next();
+        });
+      }, function(){ return next(); });
     }
-    /* Release the current lens first — many phones allow only one open camera. */
     return next();
   }).catch(function(){ return null; });
 }
@@ -1529,19 +1575,30 @@ function toggleTorch(){
   if(!scanStream){ toast('Camera not running', true); return; }
   var track = scanStream.getVideoTracks()[0];
   if(!track) return;
-  var want = !torchOn;
-  if(!want){
-    applyTorch(track, false).catch(function(){});
+
+  if(torchOn){
+    track.applyConstraints({ advanced: [{ torch: false }] }).catch(function(){});
     setTorchUi(false);
     return;
   }
+
   setTorchUi(false, true);
-  var ready = trackHasTorch(track) ? Promise.resolve(track)
-    : applyTorch(track, true).then(function(){ return track; }, function(){ return swapToTorchCamera(); });
-  ready.then(function(t){
-    if(!t){ setTorchUi(false); toast('No flash available on this camera', true); return; }
-    return applyTorch(t, true).then(function(){ setTorchUi(true); }, function(){
-      setTorchUi(false); toast('Flash could not be turned on', true);
+  /* Ask the running lens first: many phones light up without advertising it. */
+  track.applyConstraints({ advanced: [{ torch: true }] }).then(function(){
+    setTorchUi(true);
+  }, function(err){
+    var why = (err && err.message) ? err.message : 'not supported';
+    findTorchCamera().then(function(t){
+      if(!t){
+        setTorchUi(false);
+        toast('No camera here can switch the flash on — ' + why, true);
+        return;
+      }
+      setTorchUi(true);
+      toast('Flash on — switched camera');
+    }, function(){
+      setTorchUi(false);
+      toast('Flash failed — ' + why, true);
     });
   });
 }
@@ -2416,7 +2473,10 @@ var listeners = [], statusListeners = [];
 var state = 'idle', statusText = '';
 var wantConnected = false, retries = 0;
 var lockedUuid = '', gotAny = false;
+var firstSeen = {}, lastSeen = {}, teaching = false;
+var CHANNEL_KEY = 'pt-laser-channel';
 var pollTimer = null, pollStarted = false, lastRaw = {};
+var lastReading = null;
 var log = [];
 
 function supported(){ return !!(navigator.bluetooth && navigator.bluetooth.requestDevice); }
@@ -2449,27 +2509,54 @@ function toMetres(dv){
     if(txt && /\d/.test(txt)) c.push(parseFloat(txt));
   } catch(e){}
   for(var i = 0; i < c.length; i++){
-    if(isFinite(c[i]) && c[i] >= 0.05 && c[i] <= 200) return c[i];
+    /* 100 m is the D2's range; anything past it is a misread, not a distance. */
+    if(isFinite(c[i]) && c[i] >= 0.05 && c[i] <= 100) return c[i];
   }
   return null;
 }
 
+function rememberChannel(uuid){
+  try { localStorage.setItem(CHANNEL_KEY, uuid); } catch(e){}
+}
+function recalledChannel(){
+  try { return localStorage.getItem(CHANNEL_KEY) || ''; } catch(e){ return ''; }
+}
+function forgetChannel(){
+  try { localStorage.removeItem(CHANNEL_KEY); } catch(e){}
+}
+
+/* A DISTO exposes several channels that hold a steady configuration value,
+   and some of those decode to a believable distance. Locking onto the first
+   plausible number therefore pinned the field to a constant. A channel now
+   has to CHANGE after connecting before it is believed. */
 function handleValue(uuid, dv, how){
   if(!dv || !dv.byteLength) return;
   var raw = hex(dv);
   var m = toMetres(dv);
-  if(how === 'poll'){
-    if(lastRaw[uuid] === raw) return;          /* nothing changed since last poll */
-    lastRaw[uuid] = raw;
-  }
-  note(how + ' ' + short(uuid) + ' ' + dv.byteLength + 'B ' + raw + (m ? ' = ' + m.toFixed(3) + 'm' : ''));
+  var changed = (lastSeen[uuid] !== raw);
+  lastSeen[uuid] = raw;
+
+  var idle = (firstSeen[uuid] === undefined);
+  if(idle) firstSeen[uuid] = raw;
+
+  note(how + ' ' + short(uuid) + ' ' + dv.byteLength + 'B ' + raw
+       + (m ? ' = ' + m.toFixed(3) + 'm' : '') + (idle ? ' (idle)' : changed ? '' : ' (same)'));
+
   if(m == null) return;
-  if(lockedUuid && uuid !== lockedUuid) return;
-  if(!lockedUuid){
+  if(idle) return;                                  /* the value it already held */
+  if(!changed && how === 'poll') return;            /* nothing new since last read */
+
+  if(lockedUuid){
+    if(uuid !== lockedUuid) return;
+  } else {
+    if(raw === firstSeen[uuid]) return;             /* a constant is configuration */
     lockedUuid = uuid;
-    setState('connected', 'Laser ready · ' + (how === 'poll' ? 'polling ' : 'reading ') + short(uuid));
+    rememberChannel(uuid);
+    teaching = false;
+    setState('connected', 'Laser ready · reading ' + short(uuid));
   }
   gotAny = true;
+  lastReading = { metres: m, raw: raw, uuid: uuid, at: new Date().toISOString() };
   listeners.forEach(function(fn){ try { fn(m); } catch(e){} });
 }
 
@@ -2549,8 +2636,29 @@ function discover(){
   });
 }
 
+/* Read every channel once without acting on it, so each one's resting value
+   is known before the first DIST press. */
+function baseline(){
+  var i = 0;
+  function next(){
+    if(i >= readable.length) return Promise.resolve();
+    var ch = readable[i++];
+    return ch.readValue().then(function(dv){
+      if(dv && dv.byteLength){
+        var raw = hex(dv);
+        firstSeen[ch.uuid] = raw;
+        lastSeen[ch.uuid] = raw;
+        lastRaw[ch.uuid] = raw;
+        note('idle ' + short(ch.uuid) + ' ' + dv.byteLength + 'B ' + raw);
+      }
+    }, function(){}).then(next);
+  }
+  return next();
+}
+
 function attach(dev){
   lockedUuid = ''; gotAny = false; stopPolling();
+  firstSeen = {}; lastSeen = {}; lastRaw = {}; lastReading = null;
   return dev.gatt.connect().then(function(srv){
     server = srv;
     setState('connecting', 'Reading the device…');
@@ -2561,12 +2669,21 @@ function attach(dev){
       setState('lost', 'Connected but no laser channels found — open Diagnostics');
       return;
     }
-    setState('connected', 'Laser ready · press DIST (' + info.notifying + ' channels)');
-    readBattery();
+    return baseline().then(function(){
+      var recalled = recalledChannel();
+      if(recalled && readable.concat(subscribed).some(function(c){ return c.uuid === recalled; })){
+        lockedUuid = recalled;
+        note('recalled channel ' + short(recalled));
+      }
+      setState('connected', 'Laser ready \u00B7 press DIST'
+        + (lockedUuid ? ' \u00B7 ' + short(lockedUuid) : ' (' + info.notifying + ' channels)'));
+      readBattery();
+    });
+  }).then(function(){
     /* If the stack never delivers a notification, switch to polling. */
     setTimeout(function(){
       if(wantConnected && !gotAny && server) startPolling();
-    }, info.notifying ? POLL_AFTER_MS : 300);
+    }, subscribed.length ? POLL_AFTER_MS : 300);
   });
 }
 
@@ -2661,12 +2778,34 @@ APP.Laser = {
   status: function(){ return statusText; },
   deviceName: function(){ return device && device.name ? device.name : ''; },
   lockedUuid: function(){ return lockedUuid; },
-  unlock: function(){ lockedUuid = ''; lastRaw = {}; },
+  unlock: function(){
+    lockedUuid = ''; lastRaw = {}; lastSeen = {}; teaching = false;
+    forgetChannel();
+  },
+  /* Forget what is known, then watch for the one channel that moves. */
+  teach: function(){
+    lockedUuid = ''; teaching = true;
+    firstSeen = {}; lastSeen = {}; lastRaw = {};
+    forgetChannel();
+    setState(state, 'Teaching \u2014 press DIST on the laser now');
+    return baseline().then(function(){
+      if(!pollStarted) startPolling();
+      return true;
+    });
+  },
+  isTeaching: function(){ return teaching; },
+  lastReading: function(){ return lastReading; },
   diagnostics: function(){
-    return ['Device: ' + ((device && device.name) || '—'),
-            'State: ' + state + ' — ' + statusText,
+    var last = lastReading
+      ? lastReading.metres.toFixed(3) + ' m from ' + short(lastReading.uuid)
+        + ' (' + lastReading.raw + ')'
+      : 'none yet';
+    return ['Device: ' + ((device && device.name) || '\u2014'),
+            'State: ' + state + ' \u2014 ' + statusText,
             'Mode: ' + (pollStarted ? 'polling' : 'notifications')
-              + ' · locked on ' + (lockedUuid ? short(lockedUuid) : 'nothing yet'),
+              + ' \u00B7 locked on ' + (lockedUuid ? short(lockedUuid) : 'nothing yet')
+              + (teaching ? ' \u00B7 TEACHING' : ''),
+            'Last reading: ' + last,
             ''].concat(log).join('\n');
   },
   onMeasurement: function(fn){ listeners.push(fn); },
@@ -3074,8 +3213,17 @@ function showLaserDiagnostics(){
   var copy = APP.el('button', 'btn small', 'Copy');
   var readNow = APP.el('button', 'btn small', 'Read now');
   var poll = APP.el('button', 'btn small ghost', 'Force polling mode');
+  var teach = APP.el('button', 'btn small primary', 'Teach channel');
   var relock = APP.el('button', 'btn small ghost', 'Forget locked channel');
-  row.appendChild(copy); row.appendChild(readNow); row.appendChild(poll); row.appendChild(relock);
+  row.appendChild(copy); row.appendChild(readNow); row.appendChild(teach);
+  row.appendChild(poll); row.appendChild(relock);
+  teach.addEventListener('click', function(){
+    if(!APP.Laser.isConnected()){ APP.toast('Connect the laser first', true); return; }
+    APP.Laser.teach().then(function(){
+      box.textContent = APP.Laser.diagnostics();
+      APP.toast('Press DIST on the laser now');
+    });
+  });
   readNow.addEventListener('click', function(){
     APP.Laser.readNow().then(function(n){
       box.textContent = APP.Laser.diagnostics();
@@ -3095,7 +3243,10 @@ function showLaserDiagnostics(){
     else APP.toast('Copy is not available here', true);
   });
   relock.addEventListener('click', function(){ APP.Laser.unlock(); APP.toast('Will relearn on the next reading'); });
-  APP.showModal({ title: 'Laser diagnostics', node: wrap, hideOk: true, cancelText: 'Close' });
+  /* Keep it live: readings land while the sheet is open. */
+  var tick = setInterval(function(){ box.textContent = APP.Laser.diagnostics(); }, 600);
+  APP.showModal({ title: 'Laser diagnostics', node: wrap, hideOk: true, cancelText: 'Close' })
+    .then(function(){ clearInterval(tick); });
 }
 
 function initLaser(){
