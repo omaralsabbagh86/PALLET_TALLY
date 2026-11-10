@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#12161A">
-<title>Pallet Tally V9</title>
+<title>Pallet Tally V10</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -482,6 +482,18 @@ select:disabled,option:disabled{color:#5B646C;}
 .mf-merge .choice{flex:1;min-width:0;}
 .choice select{flex:1;min-width:0;}
 .choice input{flex:1;min-width:0;}
+/* ---------- Install banner ---------- */
+.app-banner{display:none;align-items:flex-start;gap:10px;padding:10px 14px;
+  background:var(--surface-raised);border-bottom:1px solid var(--border);flex:0 0 auto;}
+.app-banner.show{display:flex;}
+.app-banner.warn{background:#3A2418;border-bottom-color:var(--amber-dim);}
+.app-banner .txt{flex:1;min-width:0;font-family:var(--mono);font-size:11px;line-height:1.5;color:var(--text-mid);}
+.app-banner .txt b{color:var(--amber);}
+.app-banner .acts{display:flex;flex-direction:column;gap:6px;flex:0 0 auto;}
+.app-banner .x{background:none;border:none;color:var(--text-low);font-size:18px;
+  line-height:1;padding:0 2px;cursor:pointer;}
+.install-url{font-family:var(--mono);font-size:10.5px;color:var(--text-low);
+  word-break:break-all;margin-top:6px;}
 .laser-row{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;}
 .laser-status{font-family:var(--mono);font-size:10.5px;color:var(--text-low);flex:1;min-width:0;}
 .laser-row.on .laser-status{color:var(--amber);}
@@ -497,8 +509,17 @@ select:disabled,option:disabled{color:#5B646C;}
 <body>
 <div class="topbar">
   <div class="eyebrow"><span class="dot"></span> OFFLINE · LOCAL DEVICE STORAGE</div>
-  <h1 id="appTitle">Pallet Tally V9</h1>
+  <h1 id="appTitle">Pallet Tally V10</h1>
 </div>
+
+<div class="app-banner" id="appBanner">
+  <div class="txt" id="appBannerText"></div>
+  <div class="acts">
+    <button class="btn small primary" id="appBannerBtn" type="button">Install</button>
+  </div>
+  <button class="x" id="appBannerClose" type="button" title="Dismiss">&times;</button>
+</div>
+
 <div class="screens">
   <!-- ============ COUNT SCREEN ============ -->
   <section class="screen active" data-screen="count">
@@ -645,7 +666,18 @@ select:disabled,option:disabled{color:#5B646C;}
       <div class="stat"><div class="n" id="statToday">0</div><div class="l">Today</div></div>
       <div class="stat"><div class="n" id="statPallets">0</div><div class="l">Pallets today</div></div>
     </div>
-    <div class="section-label">Laser Device</div>
+    <div class="section-label">Install On This Phone</div>
+    <div class="panel open" id="installPanel">
+      <div class="panel-body">
+        <div class="laser-row">
+          <button class="btn small" id="installBtn" type="button">Install app</button>
+        </div>
+        <div class="laser-status" id="installStatus" style="margin-top:8px;display:block;"></div>
+        <div class="note" style="margin-top:10px;margin-bottom:0;" id="installNote"></div>
+      </div>
+    </div>
+
+    <div class="section-label" style="margin-top:22px;">Laser Device</div>
     <div class="panel open" id="laserPanel">
       <div class="panel-body">
         <div class="laser-row">
@@ -781,7 +813,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 var APP = window.APP = {};
 
 /* ---------------- constants ---------------- */
-var APP_VERSION = 'V9';
+var APP_VERSION = 'V10';
 var MERGED_COUNT = 9;           // Merged Pallet Manifest 1..9
 var PALLET_COUNT_MAX = 40;      // Physical Pallet Count 0..40 (manual entry above)
 var QR_CHUNK = 700;             // characters of payload per QR code
@@ -3792,6 +3824,162 @@ if(document.readyState === 'loading') document.addEventListener('DOMContentLoade
 else init();
 })();
 
+</script>
+
+<script>
+/* ============================================================
+   PALLET TALLY — install helper
+   The camera and the laser need a secure context, so a copy of
+   index.html opened from phone storage can never use them. This
+   detects that, names the address to use instead, and turns
+   installing into one tap where the browser allows it.
+   ============================================================ */
+(function(){
+'use strict';
+var APP_URL = 'https://omaralsabbagh86.github.io/PALLET_TALLY/';
+var DISMISS_KEY = 'pt-install-dismissed';
+
+function $(id){ return document.getElementById(id); }
+var deferred = null;
+
+/* Served over the web? A page opened from storage (file:// or
+   content://) cannot use the camera, the laser, or be installed,
+   whatever the browser reports about secure contexts. */
+function onWeb(){
+  var p = location.protocol;
+  if (p === 'https:') return true;
+  if (p === 'http:' && /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname)) return true;
+  return false;
+}
+
+function installed(){
+  try {
+    if (window.matchMedia('(display-mode: standalone)').matches) return true;
+    if (window.matchMedia('(display-mode: fullscreen)').matches) return true;
+  } catch(e){}
+  return navigator.standalone === true;
+}
+function dismissed(){
+  try { return localStorage.getItem(DISMISS_KEY) === '1'; } catch(e){ return false; }
+}
+function dismiss(){
+  try { localStorage.setItem(DISMISS_KEY, '1'); } catch(e){}
+}
+
+function copyUrl(){
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(APP_URL).then(function(){
+      if (window.APP && APP.toast) APP.toast('Address copied');
+    }, function(){
+      if (window.APP && APP.toast) APP.toast('Copy failed — type the address instead', true);
+    });
+  } else if (window.APP && APP.toast){
+    APP.toast('Copy is not available here', true);
+  }
+}
+
+function doInstall(){
+  if (!deferred){
+    if (window.APP && APP.toast){
+      APP.toast('Use the browser menu \u22EE then Add to Home screen', true);
+    }
+    return;
+  }
+  deferred.prompt();
+  deferred.userChoice.then(function(res){
+    deferred = null;
+    if (res && res.outcome === 'accepted'){
+      if (window.APP && APP.toast) APP.toast('Installing\u2026');
+      dismiss();
+    }
+    refresh();
+  });
+}
+
+function refresh(){
+  var banner = $('appBanner'), text = $('appBannerText'), btn = $('appBannerBtn');
+  var sBtn = $('installBtn'), status = $('installStatus'), note = $('installNote');
+  if (!banner) return;
+
+  var secure = onWeb();
+  var isApp = installed();
+
+  /* ---- the banner ---- */
+  banner.classList.remove('show', 'warn');
+  if (!secure){
+    banner.classList.add('show', 'warn');
+    text.innerHTML = '<b>Opened as a file \u2014 camera and laser will not work.</b>'
+      + ' Open the app at its web address instead, then install it from there.'
+      + '<div class="install-url">' + APP_URL + '</div>';
+    btn.textContent = 'Copy address';
+    btn.onclick = copyUrl;
+  } else if (!isApp && !dismissed()){
+    banner.classList.add('show');
+    text.innerHTML = deferred
+      ? 'Install Pallet Tally on this phone for a full screen app that works offline.'
+      : 'Add Pallet Tally to your home screen from the browser menu \u22EE for a full screen app.';
+    btn.textContent = 'Install';
+    btn.onclick = doInstall;
+  }
+
+  /* ---- the Export / Import section ---- */
+  if (!sBtn) return;
+  sBtn.disabled = isApp || !secure;
+  sBtn.onclick = secure ? doInstall : copyUrl;
+  if (!secure){
+    sBtn.disabled = false;
+    sBtn.textContent = 'Copy web address';
+    status.textContent = 'Not installable \u2014 this copy was opened from storage';
+    note.innerHTML = 'The camera and the Leica DISTO need a secure connection, which a file'
+      + ' opened from phone storage never has. Open <b>' + APP_URL + '</b> in Chrome,'
+      + ' then install from there.';
+  } else if (isApp){
+    sBtn.textContent = 'Already installed';
+    status.textContent = 'Running as an installed app';
+    note.innerHTML = 'Records are kept in this app\u2019s own storage on the phone.'
+      + ' Use <b>Full backup</b> above before uninstalling or changing phone.';
+  } else if (deferred){
+    sBtn.textContent = 'Install app';
+    status.textContent = 'Ready to install';
+    note.innerHTML = 'Installing gives a home screen icon and a full screen window,'
+      + ' and the app keeps working with no signal.';
+  } else {
+    sBtn.textContent = 'Install app';
+    status.textContent = 'Use the browser menu to add it';
+    note.innerHTML = 'In Chrome tap the \u22EE menu, then <b>Add to Home screen</b>.'
+      + ' On an iPhone use Share, then <b>Add to Home Screen</b>.';
+  }
+}
+
+window.addEventListener('beforeinstallprompt', function(e){
+  e.preventDefault();
+  deferred = e;
+  refresh();
+});
+window.addEventListener('appinstalled', function(){
+  deferred = null;
+  dismiss();
+  refresh();
+  if (window.APP && APP.toast) APP.toast('Installed \u2014 open it from your home screen');
+});
+
+function start(){
+  var close = $('appBannerClose');
+  if (close) close.addEventListener('click', function(){
+    dismiss();
+    $('appBanner').classList.remove('show');
+  });
+  refresh();
+  try {
+    window.matchMedia('(display-mode: standalone)').addEventListener('change', refresh);
+  } catch(e){}
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+else start();
+
+window.APP_INSTALL = { refresh: refresh, url: APP_URL,
+  canPrompt: function(){ return !!deferred; }, installed: installed, onWeb: onWeb };
+})();
 </script>
 <script>
 if ('serviceWorker' in navigator) {
