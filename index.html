@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#12161A">
-<title>Pallet Tally V12</title>
+<title>Pallet Tally V13</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -503,15 +503,29 @@ body.ar-active .bottomnav{visibility:hidden;}
   border:2px solid var(--amber);border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.45);
   transition:transform .12s ease,opacity .12s ease;opacity:.4;}
 .ar-reticle.live{opacity:1;transform:scale(1.08);}
+.ar-reticle.steady{border-color:#6ee7a8;box-shadow:0 0 0 2px rgba(0,0,0,.45),0 0 14px rgba(110,231,168,.6);}
+.ar-reticle.steady::after{background:#6ee7a8;}
+.ar-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;overflow:visible;}
+.ar-ln{stroke:var(--amber);stroke-width:3;stroke-linecap:round;}
+.ar-ln.dash{stroke-dasharray:2 9;opacity:.95;}
+.ar-ln.vert{stroke:#6ee7a8;stroke-width:4;stroke-dasharray:none;opacity:.95;}
+.ar-dot{fill:var(--amber);stroke:#000;stroke-width:2;}
+.ar-lbl{fill:#fff;font-family:var(--cond);font-size:21px;stroke:#000;stroke-width:4px;
+  paint-order:stroke fill;}
+.ar-takes{font-family:var(--mono);font-size:10.5px;color:#ffd79a;text-align:center;
+  text-shadow:0 1px 3px #000;min-height:13px;}
 .ar-reticle::after{content:'';position:absolute;left:50%;top:50%;width:6px;height:6px;
   margin:-3px 0 0 -3px;border-radius:50%;background:var(--amber);}
-.ar-readout{position:absolute;left:50%;transform:translateX(-50%);top:calc(50% + 44px);
-  text-align:center;font-family:var(--mono);font-size:13px;line-height:1.6;color:#fff;
-  text-shadow:0 1px 4px #000;padding:10px 18px;max-width:86%;
-  background:rgba(0,0,0,.55);border-radius:14px;backdrop-filter:blur(2px);}
+.ar-stack{position:absolute;left:0;right:0;bottom:12px;display:flex;flex-direction:column;
+  align-items:center;gap:10px;padding:0 14px;pointer-events:none;}
+.ar-stack > *{pointer-events:auto;}
+.ar-readout{text-align:center;font-family:var(--mono);font-size:12.5px;line-height:1.55;
+  color:#fff;text-shadow:0 1px 4px #000;padding:9px 16px;max-width:100%;
+  background:rgba(0,0,0,.6);border-radius:14px;backdrop-filter:blur(2px);}
 .ar-readout .big{display:block;font-family:var(--cond);font-size:34px;letter-spacing:.02em;
   color:var(--amber);text-shadow:0 2px 6px #000;}
 .ar-readout .sub{display:block;font-size:11px;color:#cfd6dd;}
+.ar-readout .sub.warn{color:#ffb4a2;margin-top:4px;}
 .ar-bottom{flex:0 0 auto;display:flex;flex-direction:column;gap:10px;align-items:center;
   padding:12px 14px calc(16px + env(safe-area-inset-bottom));
   background:linear-gradient(to top,rgba(0,0,0,.78),rgba(0,0,0,0));}
@@ -522,9 +536,7 @@ body.ar-active .bottomnav{visibility:hidden;}
 .ar-acts{display:flex;gap:10px;align-items:center;}
 .ar-hint{font-family:var(--mono);font-size:10.5px;color:#cfd6dd;text-align:center;
   text-shadow:0 1px 3px #000;}
-.ar-fab{position:absolute;left:50%;transform:translateX(-50%);
-  bottom:calc(132px + env(safe-area-inset-bottom));
-  background:var(--amber);color:var(--amber-ink);border:none;border-radius:999px;
+.ar-fab{background:var(--amber);color:var(--amber-ink);border:none;border-radius:999px;
   font-family:var(--cond);text-transform:uppercase;letter-spacing:.06em;font-size:16px;
   padding:14px 26px;box-shadow:0 8px 24px rgba(0,0,0,.55);cursor:pointer;z-index:4;}
 .ar-fab.hidden{display:none;}
@@ -556,7 +568,7 @@ body.ar-active .bottomnav{visibility:hidden;}
 <body>
 <div class="topbar">
   <div class="eyebrow"><span class="dot"></span> OFFLINE · LOCAL DEVICE STORAGE</div>
-  <h1 id="appTitle">Pallet Tally V12</h1>
+  <h1 id="appTitle">Pallet Tally V13</h1>
 </div>
 
 <div class="app-banner" id="appBanner">
@@ -809,20 +821,32 @@ body.ar-active .bottomnav{visibility:hidden;}
     <button class="btn small ghost" id="arClose" type="button">Close</button>
   </div>
   <div class="ar-mid">
+    <svg class="ar-svg" id="arSvg">
+      <line id="arLineDirect" class="ar-ln dash" visibility="hidden"/>
+      <line id="arLineVert" class="ar-ln vert" visibility="hidden"/>
+      <circle id="arDotA" class="ar-dot" r="7" visibility="hidden"/>
+      <circle id="arDotB" class="ar-dot" r="7" visibility="hidden"/>
+      <text id="arLabel" class="ar-lbl" text-anchor="middle" visibility="hidden"></text>
+    </svg>
     <div class="ar-reticle" id="arReticle"></div>
-    <div class="ar-readout" id="arReadout">Move the phone slowly until the circle locks on</div>
-    <button class="ar-fab hidden" id="arUse" type="button">Use 0 cm</button>
+    <div class="ar-stack">
+      <div class="ar-readout" id="arReadout">Move the phone slowly until the circle locks on</div>
+      <button class="ar-fab hidden" id="arUse" type="button">Use 0 cm</button>
+    </div>
   </div>
   <div class="ar-bottom">
     <div class="ar-seg" id="arSeg">
       <button class="on" data-mode="height" type="button">Height</button>
       <button data-mode="direct" type="button">Direct</button>
     </div>
+    <div class="ar-takes" id="arTakes"></div>
     <div class="ar-acts">
       <button class="btn primary" id="arSet" type="button">Set floor point</button>
+      <button class="btn small ghost hidden" id="arAgain" type="button">Measure again</button>
       <button class="btn small ghost" id="arRedo" type="button">Start over</button>
     </div>
-    <div class="ar-hint">Roughly &plusmn;2&ndash;5 cm. The DISTO is far more precise.</div>
+    <div class="ar-hint">Stand back 2&ndash;3 m so the top surface is in view.
+      Roughly &plusmn;2&ndash;5 cm &mdash; the DISTO is far more precise.</div>
   </div>
 </div>
 
@@ -884,7 +908,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 var APP = window.APP = {};
 
 /* ---------------- constants ---------------- */
-var APP_VERSION = 'V12';
+var APP_VERSION = 'V13';
 var MERGED_COUNT = 9;           // Merged Pallet Manifest 1..9
 var PALLET_COUNT_MAX = 40;      // Physical Pallet Count 0..40 (manual entry above)
 var QR_CHUNK = 700;             // characters of payload per QR code
@@ -2889,84 +2913,238 @@ APP.Laser = {
 /* ============================================================
    PALLET TALLY — measure with the camera (WebXR + ARCore)
    ------------------------------------------------------------
-   Chrome on Android can place a point on a real surface through
-   ARCore. Two points give a distance, the way the iPhone Measure
-   app works. For a pallet the useful figure is the vertical gap
-   between the floor and the top of the load, so that is the
-   default; the straight line between the points is offered too.
+   Two faults showed up measuring a 145 cm stack: every reading
+   came out short, and repeats scattered by 30 cm.
 
-   This needs https, Chrome on Android and Google Play Services
-   for AR, so the button only appears where it can actually run.
+   The scatter came from sampling a single frame at the instant
+   of the tap. ARCore's hit point jitters by a couple of
+   centimetres, and occasionally throws a wild one. So points are
+   now the median of a rolling half second of hits, capture is
+   blocked until that window is steady, and the live spread is
+   shown so a bad moment is visible before it is committed.
+
+   The short readings came from where the ray lands. Aimed at the
+   top edge of a stack from standing height, it grazes the front
+   face and reports a point below the real top. Nothing in the
+   maths can recover that, so the app now measures the vertical
+   gap from the floor plane, warns when the second point sits
+   suspiciously far from the first horizontally or barely above
+   it, and says plainly where to stand.
    ============================================================ */
 (function(){
 'use strict';
 var APP = window.APP;
 var $ = APP.$;
 
-var session = null, hitSource = null, localSpace = null, gl = null, canvas = null;
-var current = null;      /* where the reticle is right now */
-var pointA = null, pointB = null;
-var mode = 'height';
-var frozen = null;       /* the measurement, once both points are down */
-var onImport = null;
+var SAMPLE_MS   = 500;     /* length of the rolling window          */
+var MIN_SAMPLES = 8;       /* fewest hits before a point may be set */
+var STEADY_M    = 0.015;   /* 1.5 cm spread counts as holding still */
+var MAX_HIT_M   = 12;      /* beyond this the hit is not the pallet */
+var MAX_HORIZ_M = 1.2;     /* floor and top points should be close  */
 
-function supported(){
-  if(!navigator.xr || !navigator.xr.isSessionSupported) return Promise.resolve(false);
-  return navigator.xr.isSessionSupported('immersive-ar').catch(function(){ return false; });
+var session = null, hitSource = null, localSpace = null, gl = null, canvas = null;
+var samples = [];          /* {t,x,y,z} inside the rolling window */
+var current = null;        /* median of the window */
+var spread = 0, steady = false;
+var pointA = null, pointB = null;
+var takes = [];            /* every completed floor-to-top measurement */
+var mode = 'height';
+var frozen = null;
+var onImport = null;
+var lastView = null;
+
+/* ---------------------------------------------------------------- maths */
+function median(nums){
+  var a = nums.slice().sort(function(x, y){ return x - y; });
+  var n = a.length;
+  if(!n) return 0;
+  return n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
 }
 function dist3(a, b){
   return Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y) + (b.z - a.z) * (b.z - a.z));
 }
 function vertical(a, b){ return Math.abs(b.y - a.y); }
+function horizontal(a, b){
+  return Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.z - a.z) * (b.z - a.z));
+}
 function metres(a, b){ return mode === 'height' ? vertical(a, b) : dist3(a, b); }
 function toCm(m){ return APP.PT.metresToCm(m); }
 
+/* The median of each axis, plus how far the samples stray from it. A single
+   wild hit moves a median far less than it moves a mean. */
+function summarise(now){
+  samples = samples.filter(function(s){ return now - s.t <= SAMPLE_MS; });
+  if(samples.length < 3){ return null; }
+  var mid = {
+    x: median(samples.map(function(s){ return s.x; })),
+    y: median(samples.map(function(s){ return s.y; })),
+    z: median(samples.map(function(s){ return s.z; }))
+  };
+  var worst = 0;
+  samples.forEach(function(s){
+    var d = dist3(mid, s);
+    if(d > worst) worst = d;
+  });
+  return { pos: mid, spread: worst, n: samples.length };
+}
+
+/* Project a world point to a pixel on screen, so the line can be drawn in
+   the DOM overlay instead of in WebGL. */
+function project(p, view, w, h){
+  var vm = view.transform.inverse.matrix, pm = view.projectionMatrix;
+  var x = p.x, y = p.y, z = p.z;
+  var vx = vm[0] * x + vm[4] * y + vm[8]  * z + vm[12];
+  var vy = vm[1] * x + vm[5] * y + vm[9]  * z + vm[13];
+  var vz = vm[2] * x + vm[6] * y + vm[10] * z + vm[14];
+  var vw = vm[3] * x + vm[7] * y + vm[11] * z + vm[15];
+  var cx = pm[0] * vx + pm[4] * vy + pm[8]  * vz + pm[12] * vw;
+  var cy = pm[1] * vx + pm[5] * vy + pm[9]  * vz + pm[13] * vw;
+  var cw = pm[3] * vx + pm[7] * vy + pm[11] * vz + pm[15] * vw;
+  if(!(cw > 1e-4)) return null;                 /* behind the camera */
+  return { x: (cx / cw * 0.5 + 0.5) * w, y: (1 - (cy / cw * 0.5 + 0.5)) * h };
+}
+
+/* ---------------------------------------------------------------- drawing */
+function hide(el){ el.setAttribute('visibility', 'hidden'); }
+function show(el){ el.setAttribute('visibility', 'visible'); }
+
+function drawGuides(){
+  var svg = $('arSvg');
+  var dotA = $('arDotA'), dotB = $('arDotB');
+  var lnD = $('arLineDirect'), lnV = $('arLineVert'), lbl = $('arLabel');
+  [dotA, dotB, lnD, lnV, lbl].forEach(hide);
+  if(!pointA || !lastView) return;
+
+  var box = svg.getBoundingClientRect();
+  var w = box.width, h = box.height;
+  if(!w || !h) return;
+
+  var target = pointB || current;
+  var a = project(pointA, lastView, w, h);
+  if(a){
+    dotA.setAttribute('cx', a.x); dotA.setAttribute('cy', a.y); show(dotA);
+  }
+  if(!target) return;
+  var b = project(target, lastView, w, h);
+  if(!a || !b) return;
+
+  /* the dotted line between the two points, kept once both are down */
+  lnD.setAttribute('x1', a.x); lnD.setAttribute('y1', a.y);
+  lnD.setAttribute('x2', b.x); lnD.setAttribute('y2', b.y);
+  show(lnD);
+  dotB.setAttribute('cx', b.x); dotB.setAttribute('cy', b.y); show(dotB);
+
+  /* in height mode the figure is the vertical gap, so show that leg too */
+  if(mode === 'height'){
+    var plumb = project({ x: pointA.x, y: target.y, z: pointA.z }, lastView, w, h);
+    if(plumb){
+      lnV.setAttribute('x1', a.x); lnV.setAttribute('y1', a.y);
+      lnV.setAttribute('x2', plumb.x); lnV.setAttribute('y2', plumb.y);
+      show(lnV);
+    }
+  }
+  var m = metres(pointA, target);
+  lbl.textContent = toCm(m) + ' cm';
+  /* beside the top point rather than mid-line, where the readout sits */
+  var right = b.x < w * 0.62;
+  lbl.setAttribute('x', b.x + (right ? 20 : -20));
+  lbl.setAttribute('y', b.y + 7);
+  lbl.setAttribute('text-anchor', right ? 'start' : 'end');
+  show(lbl);
+}
+
+/* ---------------------------------------------------------------- warnings */
+function problem(a, b){
+  if(!a || !b) return '';
+  var up = b.y - a.y;
+  if(up < 0.1) return 'That point is barely above the floor point — the ray may have landed on the floor again.';
+  var off = horizontal(a, b);
+  if(off > MAX_HORIZ_M) return 'That point is ' + off.toFixed(1) + ' m to the side — it may have landed behind the pallet.';
+  return '';
+}
+
+function result(){
+  if(!takes.length) return null;
+  var med = median(takes);
+  var lo = Math.min.apply(null, takes), hi = Math.max.apply(null, takes);
+  return { value: med, n: takes.length, range: hi - lo };
+}
+
+/* ---------------------------------------------------------------- UI */
 function setSeg(next){
   mode = next;
   Array.prototype.forEach.call($('arSeg').children, function(b){
     b.classList.toggle('on', b.getAttribute('data-mode') === next);
   });
-  /* Switching after both points are down re-measures the same two points
-     rather than relabelling the old figure. */
-  if(frozen && pointA && pointB) frozen.value = metres(pointA, pointB);
+  /* re-measure the stored points rather than relabel an old figure */
+  if(pointA && pointB){
+    takes = [metres(pointA, pointB)];
+    frozen = { value: takes[0] };
+  }
   render();
 }
 
 function render(){
   var out = $('arReadout'), fab = $('arUse'), set = $('arSet');
-  var ret = $('arReticle');
+  var ret = $('arReticle'), again = $('arAgain'), takesEl = $('arTakes');
+
   ret.classList.toggle('live', !!current);
+  ret.classList.toggle('steady', steady);
+
+  var r = result();
+  takesEl.textContent = (r && r.n > 1)
+    ? r.n + ' takes · median ' + toCm(r.value) + ' cm · range ' + Math.round(r.range * 100) + ' cm'
+    : '';
 
   if(frozen){
-    out.innerHTML = '<span class="big">' + toCm(frozen.value) + ' cm</span>'
+    var warn = problem(pointA, pointB);
+    out.innerHTML = '<span class="big">' + toCm(r.value) + ' cm</span>'
       + '<span class="sub">' + (mode === 'height' ? 'vertical height' : 'straight line')
-      + ' · ' + frozen.value.toFixed(3) + ' m</span>';
-    fab.textContent = 'Use ' + toCm(frozen.value) + ' cm';
+      + ' · ' + r.value.toFixed(3) + ' m'
+      + (r.n > 1 ? ' · median of ' + r.n : '') + '</span>'
+      + (warn ? '<span class="sub warn">' + warn + '</span>' : '');
+    fab.textContent = 'Use ' + toCm(r.value) + ' cm';
     fab.classList.remove('hidden');
-    set.textContent = 'Set floor point';
+    again.classList.remove('hidden');
     set.disabled = true;
+    set.classList.add('hidden');
+    set.textContent = 'Set floor point';
+    drawGuides();
     return;
   }
+
   fab.classList.add('hidden');
-  set.disabled = !current;
+  set.classList.remove('hidden');
+  again.classList.toggle('hidden', !takes.length);
+  set.disabled = !steady;
+
+  var quality = current
+    ? '<span class="sub">' + (steady ? 'steady' : 'hold still') + ' · ±'
+      + Math.max(1, Math.round(spread * 100)) + ' cm</span>'
+    : '';
 
   if(!pointA){
     set.textContent = 'Set floor point';
     out.innerHTML = current
-      ? '<span class="sub">Aim at the floor beside the pallet, then tap Set floor point</span>'
-      : '<span class="sub">Move the phone slowly until the circle locks on</span>';
-    return;
-  }
-  set.textContent = 'Set top point';
-  if(current){
-    var m = metres(pointA, current);
-    out.innerHTML = '<span class="big">' + toCm(m) + ' cm</span>'
-      + '<span class="sub">aim at the top of the load, then tap Set top point</span>';
+      ? '<span class="sub">Aim at the floor right beside the pallet</span>' + quality
+      : '<span class="sub">Move the phone slowly across the floor until the circle locks on</span>';
   } else {
-    out.innerHTML = '<span class="sub">Lost tracking — move the phone slowly</span>';
+    set.textContent = 'Set top point';
+    if(current){
+      var m = metres(pointA, current);
+      var warn2 = problem(pointA, current);
+      out.innerHTML = '<span class="big">' + toCm(m) + ' cm</span>'
+        + '<span class="sub">aim at the top surface of the load, not the front face</span>'
+        + quality
+        + (warn2 ? '<span class="sub warn">' + warn2 + '</span>' : '');
+    } else {
+      out.innerHTML = '<span class="sub">Lost tracking — move the phone slowly</span>';
+    }
   }
+  drawGuides();
 }
 
+/* ---------------------------------------------------------------- frames */
 function onFrame(t, frame){
   if(!session) return;
   session.requestAnimationFrame(onFrame);
@@ -2980,47 +3158,90 @@ function onFrame(t, frame){
       }
     } catch(e){}
   }
-  if(frozen || !hitSource) return;
+
+  try {
+    var vp = frame.getViewerPose(localSpace);
+    if(vp && vp.views && vp.views.length) lastView = vp.views[0];
+  } catch(e){}
+
+  if(frozen){ render(); return; }
+  if(!hitSource) return;
+
   var hits = [];
   try { hits = frame.getHitTestResults(hitSource) || []; } catch(e){}
-  if(!hits.length){ current = null; render(); return; }
-  var pose = hits[0].getPose(localSpace);
-  if(!pose){ current = null; render(); return; }
-  var pos = pose.transform.position;
-  current = { x: pos.x, y: pos.y, z: pos.z };
+  var now = (typeof t === 'number') ? t : Date.now();
+
+  if(hits.length){
+    var pose = hits[0].getPose(localSpace);
+    if(pose){
+      var p = pose.transform.position;
+      var cam = lastView ? lastView.transform.position : null;
+      var far = cam ? dist3({ x: cam.x, y: cam.y, z: cam.z }, p) > MAX_HIT_M : false;
+      if(!far) samples.push({ t: now, x: p.x, y: p.y, z: p.z });
+    }
+  }
+
+  var s = summarise(now);
+  if(s && s.n >= 3){
+    current = s.pos;
+    spread = s.spread;
+    steady = (s.n >= MIN_SAMPLES && s.spread <= STEADY_M);
+  } else {
+    current = null; spread = 0; steady = false;
+  }
   render();
 }
 
+/* ---------------------------------------------------------------- actions */
 function capture(){
-  if(!current || frozen) return;
-  if(!pointA){ pointA = current; render(); return; }
-  pointB = current;
-  frozen = { value: metres(pointA, pointB), a: pointA, b: pointB };
+  if(!current || frozen || !steady) return;
+  if(!pointA){
+    pointA = { x: current.x, y: current.y, z: current.z };
+    samples = []; current = null; steady = false;
+    render();
+    return;
+  }
+  pointB = { x: current.x, y: current.y, z: current.z };
+  takes.push(metres(pointA, pointB));
+  frozen = { value: median(takes) };
+  render();
+}
+
+/* Keep the takes so far, clear the points, and measure the same stack again. */
+function again(){
+  pointA = null; pointB = null; frozen = null;
+  samples = []; current = null; steady = false;
   render();
 }
 
 function reset(){
-  pointA = null; pointB = null; frozen = null;
+  pointA = null; pointB = null; frozen = null; takes = [];
+  samples = []; current = null; steady = false; spread = 0;
   render();
 }
 
 function stop(){
   var s = session;
-  session = null; hitSource = null; localSpace = null;
+  session = null; hitSource = null; localSpace = null; lastView = null;
   $('arOverlay').classList.remove('show');
   document.body.classList.remove('ar-active');
   if(s){ try { s.end(); } catch(e){} }
   if(canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
   canvas = null; gl = null;
-  current = null;
   reset();
 }
 
 function useReading(){
-  if(!frozen) return;
-  var cm = toCm(frozen.value);
-  if(onImport) onImport(cm, frozen.value, mode);
+  var r = result();
+  if(!r) return;
+  var cm = toCm(r.value);
+  if(onImport) onImport(cm, r.value, mode, r.n);
   stop();
+}
+
+function supported(){
+  if(!navigator.xr || !navigator.xr.isSessionSupported) return Promise.resolve(false);
+  return navigator.xr.isSessionSupported('immersive-ar').catch(function(){ return false; });
 }
 
 function start(){
@@ -3041,7 +3262,14 @@ function start(){
   }
 
   var opts = { requiredFeatures: ['hit-test'] };
-  if(overlay){ opts.optionalFeatures = ['dom-overlay']; opts.domOverlay = { root: overlay }; }
+  if(overlay){
+    opts.optionalFeatures = ['dom-overlay', 'depth-sensing'];
+    opts.domOverlay = { root: overlay };
+    /* where the phone has a depth sensor, hit tests land far better on
+       featureless cardboard; ignored where it does not */
+    opts.depthSensing = { usagePreference: ['cpu-optimized'],
+                          dataFormatPreference: ['luminance-alpha'] };
+  }
 
   return navigator.xr.requestSession('immersive-ar', opts).then(function(s){
     session = s;
@@ -3054,9 +3282,7 @@ function start(){
       if(canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
       canvas = null; gl = null;
     });
-    try {
-      s.updateRenderState({ baseLayer: new XRWebGLLayer(s, gl) });
-    } catch(e){}
+    try { s.updateRenderState({ baseLayer: new XRWebGLLayer(s, gl) }); } catch(e){}
     return s.requestReferenceSpace('local').then(function(space){
       localSpace = space;
       return s.requestReferenceSpace('viewer');
@@ -3080,18 +3306,21 @@ APP.Measure = {
   start: start,
   stop: stop,
   reset: reset,
+  again: again,
   capture: capture,
   use: useReading,
   setMode: setSeg,
   onImport: function(fn){ onImport = fn; },
   state: function(){
+    var r = result();
     return { hasA: !!pointA, hasB: !!pointB, mode: mode,
-             metres: frozen ? frozen.value : null, tracking: !!current, open: !!session };
+             metres: r ? r.value : null, takes: takes.length,
+             tracking: !!current, steady: steady, spread: spread,
+             open: !!session };
   },
-  /* exposed so the maths can be checked without a headset */
   _test: {
-    dist3: dist3, vertical: vertical,
-    feed: function(pos){ current = pos; render(); }
+    dist3: dist3, vertical: vertical, horizontal: horizontal,
+    median: median, project: project, problem: problem
   }
 };
 })();
@@ -3533,16 +3762,18 @@ function showLaserDiagnostics(){
 
 function initMeasure(){
   var M = APP.Measure, btn = $('arBtn');
-  M.onImport(function(cm, m, mode){
+  M.onImport(function(cm, m, mode, takes){
     writeChoice('stockHeight', cm);
     $('laserLast').textContent = 'Camera measured ' + m.toFixed(3) + ' m → ' + cm
-      + ' cm (' + (mode === 'height' ? 'vertical' : 'straight line') + ') · '
+      + ' cm (' + (mode === 'height' ? 'vertical' : 'straight line')
+      + (takes > 1 ? ', median of ' + takes : '') + ') · '
       + APP.formatDateTime(new Date().toISOString());
     APP.toast('Stock height ' + cm + ' cm from the camera');
   });
   $('arClose').addEventListener('click', function(){ M.stop(); });
   $('arSet').addEventListener('click', function(){ M.capture(); });
   $('arRedo').addEventListener('click', function(){ M.reset(); });
+  $('arAgain').addEventListener('click', function(){ M.again(); });
   $('arUse').addEventListener('click', function(){ M.use(); });
   Array.prototype.forEach.call($('arSeg').children, function(b){
     b.addEventListener('click', function(){ M.setMode(b.getAttribute('data-mode')); });
