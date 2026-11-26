@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#12161A">
-<title>Pallet Tally V11</title>
+<title>Pallet Tally V12</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -482,6 +482,53 @@ select:disabled,option:disabled{color:#5B646C;}
 .mf-merge .choice{flex:1;min-width:0;}
 .choice select{flex:1;min-width:0;}
 .choice input{flex:1;min-width:0;}
+/* ---------- Measure with the camera (WebXR) ---------- */
+.ar-overlay{position:fixed;inset:0;z-index:95;display:none;flex-direction:column;
+  background:transparent;color:#fff;-webkit-tap-highlight-color:transparent;}
+.ar-overlay.show{display:flex;}
+/* While measuring, the page behind must not show through: the camera feed
+   belongs there, and if dom-overlay is refused there would be nothing to
+   hide the form. */
+body.ar-active .topbar,
+body.ar-active .app-banner,
+body.ar-active .screens,
+body.ar-active .bottomnav{visibility:hidden;}
+.ar-top{flex:0 0 auto;display:flex;align-items:center;gap:10px;
+  padding:calc(10px + env(safe-area-inset-top)) 14px 10px;
+  background:linear-gradient(to bottom,rgba(0,0,0,.72),rgba(0,0,0,0));}
+.ar-top .t{font-family:var(--cond);text-transform:uppercase;font-size:15px;
+  letter-spacing:.05em;flex:1;text-shadow:0 1px 3px #000;}
+.ar-mid{flex:1 1 auto;position:relative;min-height:0;}
+.ar-reticle{position:absolute;left:50%;top:50%;width:46px;height:46px;margin:-23px 0 0 -23px;
+  border:2px solid var(--amber);border-radius:50%;box-shadow:0 0 0 2px rgba(0,0,0,.45);
+  transition:transform .12s ease,opacity .12s ease;opacity:.4;}
+.ar-reticle.live{opacity:1;transform:scale(1.08);}
+.ar-reticle::after{content:'';position:absolute;left:50%;top:50%;width:6px;height:6px;
+  margin:-3px 0 0 -3px;border-radius:50%;background:var(--amber);}
+.ar-readout{position:absolute;left:50%;transform:translateX(-50%);top:calc(50% + 44px);
+  text-align:center;font-family:var(--mono);font-size:13px;line-height:1.6;color:#fff;
+  text-shadow:0 1px 4px #000;padding:10px 18px;max-width:86%;
+  background:rgba(0,0,0,.55);border-radius:14px;backdrop-filter:blur(2px);}
+.ar-readout .big{display:block;font-family:var(--cond);font-size:34px;letter-spacing:.02em;
+  color:var(--amber);text-shadow:0 2px 6px #000;}
+.ar-readout .sub{display:block;font-size:11px;color:#cfd6dd;}
+.ar-bottom{flex:0 0 auto;display:flex;flex-direction:column;gap:10px;align-items:center;
+  padding:12px 14px calc(16px + env(safe-area-inset-bottom));
+  background:linear-gradient(to top,rgba(0,0,0,.78),rgba(0,0,0,0));}
+.ar-seg{display:flex;border:1px solid rgba(255,255,255,.3);border-radius:999px;overflow:hidden;}
+.ar-seg button{background:transparent;border:none;color:#dfe5ea;font-family:var(--mono);
+  font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:7px 16px;cursor:pointer;}
+.ar-seg button.on{background:var(--amber);color:var(--amber-ink);}
+.ar-acts{display:flex;gap:10px;align-items:center;}
+.ar-hint{font-family:var(--mono);font-size:10.5px;color:#cfd6dd;text-align:center;
+  text-shadow:0 1px 3px #000;}
+.ar-fab{position:absolute;left:50%;transform:translateX(-50%);
+  bottom:calc(132px + env(safe-area-inset-bottom));
+  background:var(--amber);color:var(--amber-ink);border:none;border-radius:999px;
+  font-family:var(--cond);text-transform:uppercase;letter-spacing:.06em;font-size:16px;
+  padding:14px 26px;box-shadow:0 8px 24px rgba(0,0,0,.55);cursor:pointer;z-index:4;}
+.ar-fab.hidden{display:none;}
+
 /* ---------- Install banner ---------- */
 .app-banner{display:none;align-items:flex-start;gap:10px;padding:10px 14px;
   background:var(--surface-raised);border-bottom:1px solid var(--border);flex:0 0 auto;}
@@ -509,7 +556,7 @@ select:disabled,option:disabled{color:#5B646C;}
 <body>
 <div class="topbar">
   <div class="eyebrow"><span class="dot"></span> OFFLINE · LOCAL DEVICE STORAGE</div>
-  <h1 id="appTitle">Pallet Tally V11</h1>
+  <h1 id="appTitle">Pallet Tally V12</h1>
 </div>
 
 <div class="app-banner" id="appBanner">
@@ -603,6 +650,7 @@ select:disabled,option:disabled{color:#5B646C;}
         <div id="stockHeightHost"></div>
         <div class="laser-row">
           <button class="btn small" id="laserBtn" type="button">Connect laser</button>
+          <button class="btn small hidden" id="arBtn" type="button">Measure with camera</button>
           <span class="laser-status" id="laserStatus">Leica DISTO D2 — optional</span>
         </div>
         <div class="laser-last" id="laserLast"></div>
@@ -755,6 +803,29 @@ select:disabled,option:disabled{color:#5B646C;}
 </div>
 <div class="capture-flash" id="captureFlash"></div>
 <div class="toast" id="toast"><span class="tdot"></span><span class="msg"></span></div>
+<div class="ar-overlay" id="arOverlay">
+  <div class="ar-top">
+    <span class="t">Measure height</span>
+    <button class="btn small ghost" id="arClose" type="button">Close</button>
+  </div>
+  <div class="ar-mid">
+    <div class="ar-reticle" id="arReticle"></div>
+    <div class="ar-readout" id="arReadout">Move the phone slowly until the circle locks on</div>
+    <button class="ar-fab hidden" id="arUse" type="button">Use 0 cm</button>
+  </div>
+  <div class="ar-bottom">
+    <div class="ar-seg" id="arSeg">
+      <button class="on" data-mode="height" type="button">Height</button>
+      <button data-mode="direct" type="button">Direct</button>
+    </div>
+    <div class="ar-acts">
+      <button class="btn primary" id="arSet" type="button">Set floor point</button>
+      <button class="btn small ghost" id="arRedo" type="button">Start over</button>
+    </div>
+    <div class="ar-hint">Roughly &plusmn;2&ndash;5 cm. The DISTO is far more precise.</div>
+  </div>
+</div>
+
 <div class="scan-overlay" id="scanOverlay">
   <div class="sc-bar">
     <span class="t" id="scanTitle">Scan</span>
@@ -813,7 +884,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 var APP = window.APP = {};
 
 /* ---------------- constants ---------------- */
-var APP_VERSION = 'V11';
+var APP_VERSION = 'V12';
 var MERGED_COUNT = 9;           // Merged Pallet Manifest 1..9
 var PALLET_COUNT_MAX = 40;      // Physical Pallet Count 0..40 (manual entry above)
 var QR_CHUNK = 700;             // characters of payload per QR code
@@ -2814,6 +2885,217 @@ APP.Laser = {
 };
 })();
 
+
+/* ============================================================
+   PALLET TALLY — measure with the camera (WebXR + ARCore)
+   ------------------------------------------------------------
+   Chrome on Android can place a point on a real surface through
+   ARCore. Two points give a distance, the way the iPhone Measure
+   app works. For a pallet the useful figure is the vertical gap
+   between the floor and the top of the load, so that is the
+   default; the straight line between the points is offered too.
+
+   This needs https, Chrome on Android and Google Play Services
+   for AR, so the button only appears where it can actually run.
+   ============================================================ */
+(function(){
+'use strict';
+var APP = window.APP;
+var $ = APP.$;
+
+var session = null, hitSource = null, localSpace = null, gl = null, canvas = null;
+var current = null;      /* where the reticle is right now */
+var pointA = null, pointB = null;
+var mode = 'height';
+var frozen = null;       /* the measurement, once both points are down */
+var onImport = null;
+
+function supported(){
+  if(!navigator.xr || !navigator.xr.isSessionSupported) return Promise.resolve(false);
+  return navigator.xr.isSessionSupported('immersive-ar').catch(function(){ return false; });
+}
+function dist3(a, b){
+  return Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y) + (b.z - a.z) * (b.z - a.z));
+}
+function vertical(a, b){ return Math.abs(b.y - a.y); }
+function metres(a, b){ return mode === 'height' ? vertical(a, b) : dist3(a, b); }
+function toCm(m){ return APP.PT.metresToCm(m); }
+
+function setSeg(next){
+  mode = next;
+  Array.prototype.forEach.call($('arSeg').children, function(b){
+    b.classList.toggle('on', b.getAttribute('data-mode') === next);
+  });
+  /* Switching after both points are down re-measures the same two points
+     rather than relabelling the old figure. */
+  if(frozen && pointA && pointB) frozen.value = metres(pointA, pointB);
+  render();
+}
+
+function render(){
+  var out = $('arReadout'), fab = $('arUse'), set = $('arSet');
+  var ret = $('arReticle');
+  ret.classList.toggle('live', !!current);
+
+  if(frozen){
+    out.innerHTML = '<span class="big">' + toCm(frozen.value) + ' cm</span>'
+      + '<span class="sub">' + (mode === 'height' ? 'vertical height' : 'straight line')
+      + ' · ' + frozen.value.toFixed(3) + ' m</span>';
+    fab.textContent = 'Use ' + toCm(frozen.value) + ' cm';
+    fab.classList.remove('hidden');
+    set.textContent = 'Set floor point';
+    set.disabled = true;
+    return;
+  }
+  fab.classList.add('hidden');
+  set.disabled = !current;
+
+  if(!pointA){
+    set.textContent = 'Set floor point';
+    out.innerHTML = current
+      ? '<span class="sub">Aim at the floor beside the pallet, then tap Set floor point</span>'
+      : '<span class="sub">Move the phone slowly until the circle locks on</span>';
+    return;
+  }
+  set.textContent = 'Set top point';
+  if(current){
+    var m = metres(pointA, current);
+    out.innerHTML = '<span class="big">' + toCm(m) + ' cm</span>'
+      + '<span class="sub">aim at the top of the load, then tap Set top point</span>';
+  } else {
+    out.innerHTML = '<span class="sub">Lost tracking — move the phone slowly</span>';
+  }
+}
+
+function onFrame(t, frame){
+  if(!session) return;
+  session.requestAnimationFrame(onFrame);
+  if(gl){
+    try {
+      var layer = session.renderState && session.renderState.baseLayer;
+      if(layer){
+        gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
+        gl.clearColor(0, 0, 0, 0);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      }
+    } catch(e){}
+  }
+  if(frozen || !hitSource) return;
+  var hits = [];
+  try { hits = frame.getHitTestResults(hitSource) || []; } catch(e){}
+  if(!hits.length){ current = null; render(); return; }
+  var pose = hits[0].getPose(localSpace);
+  if(!pose){ current = null; render(); return; }
+  var pos = pose.transform.position;
+  current = { x: pos.x, y: pos.y, z: pos.z };
+  render();
+}
+
+function capture(){
+  if(!current || frozen) return;
+  if(!pointA){ pointA = current; render(); return; }
+  pointB = current;
+  frozen = { value: metres(pointA, pointB), a: pointA, b: pointB };
+  render();
+}
+
+function reset(){
+  pointA = null; pointB = null; frozen = null;
+  render();
+}
+
+function stop(){
+  var s = session;
+  session = null; hitSource = null; localSpace = null;
+  $('arOverlay').classList.remove('show');
+  document.body.classList.remove('ar-active');
+  if(s){ try { s.end(); } catch(e){} }
+  if(canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+  canvas = null; gl = null;
+  current = null;
+  reset();
+}
+
+function useReading(){
+  if(!frozen) return;
+  var cm = toCm(frozen.value);
+  if(onImport) onImport(cm, frozen.value, mode);
+  stop();
+}
+
+function start(){
+  if(session) return Promise.resolve();
+  var overlay = $('arOverlay');
+  reset();
+  canvas = document.createElement('canvas');
+  canvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;z-index:94;';
+  document.body.appendChild(canvas);
+  try {
+    gl = canvas.getContext('webgl', { xrCompatible: true, alpha: true, antialias: false })
+      || canvas.getContext('experimental-webgl', { xrCompatible: true, alpha: true });
+  } catch(e){ gl = null; }
+  if(!gl){
+    stop();
+    APP.toast('This phone cannot start the AR view', true);
+    return Promise.reject(new Error('no webgl'));
+  }
+
+  var opts = { requiredFeatures: ['hit-test'] };
+  if(overlay){ opts.optionalFeatures = ['dom-overlay']; opts.domOverlay = { root: overlay }; }
+
+  return navigator.xr.requestSession('immersive-ar', opts).then(function(s){
+    session = s;
+    overlay.classList.add('show');
+    document.body.classList.add('ar-active');
+    s.addEventListener('end', function(){
+      session = null;
+      overlay.classList.remove('show');
+      document.body.classList.remove('ar-active');
+      if(canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+      canvas = null; gl = null;
+    });
+    try {
+      s.updateRenderState({ baseLayer: new XRWebGLLayer(s, gl) });
+    } catch(e){}
+    return s.requestReferenceSpace('local').then(function(space){
+      localSpace = space;
+      return s.requestReferenceSpace('viewer');
+    }).then(function(viewer){
+      return s.requestHitTestSource({ space: viewer });
+    }).then(function(src){
+      hitSource = src;
+      render();
+      s.requestAnimationFrame(onFrame);
+    });
+  }).catch(function(err){
+    stop();
+    var why = (err && err.message) ? err.message : 'not available';
+    APP.toast('Camera measuring could not start — ' + why, true);
+    throw err;
+  });
+}
+
+APP.Measure = {
+  supported: supported,
+  start: start,
+  stop: stop,
+  reset: reset,
+  capture: capture,
+  use: useReading,
+  setMode: setSeg,
+  onImport: function(fn){ onImport = fn; },
+  state: function(){
+    return { hasA: !!pointA, hasB: !!pointB, mode: mode,
+             metres: frozen ? frozen.value : null, tracking: !!current, open: !!session };
+  },
+  /* exposed so the maths can be checked without a headset */
+  _test: {
+    dist3: dist3, vertical: vertical,
+    feed: function(pos){ current = pos; render(); }
+  }
+};
+})();
+
 /* ============================================================
    PALLET TALLY — count form, records, export / import
    ============================================================ */
@@ -3247,6 +3529,28 @@ function showLaserDiagnostics(){
   var tick = setInterval(function(){ box.textContent = APP.Laser.diagnostics(); }, 600);
   APP.showModal({ title: 'Laser diagnostics', node: wrap, hideOk: true, cancelText: 'Close' })
     .then(function(){ clearInterval(tick); });
+}
+
+function initMeasure(){
+  var M = APP.Measure, btn = $('arBtn');
+  M.onImport(function(cm, m, mode){
+    writeChoice('stockHeight', cm);
+    $('laserLast').textContent = 'Camera measured ' + m.toFixed(3) + ' m → ' + cm
+      + ' cm (' + (mode === 'height' ? 'vertical' : 'straight line') + ') · '
+      + APP.formatDateTime(new Date().toISOString());
+    APP.toast('Stock height ' + cm + ' cm from the camera');
+  });
+  $('arClose').addEventListener('click', function(){ M.stop(); });
+  $('arSet').addEventListener('click', function(){ M.capture(); });
+  $('arRedo').addEventListener('click', function(){ M.reset(); });
+  $('arUse').addEventListener('click', function(){ M.use(); });
+  Array.prototype.forEach.call($('arSeg').children, function(b){
+    b.addEventListener('click', function(){ M.setMode(b.getAttribute('data-mode')); });
+  });
+  btn.addEventListener('click', function(){ M.start().catch(function(){}); });
+  M.supported().then(function(ok){
+    btn.classList.toggle('hidden', !ok);
+  });
 }
 
 function initLaser(){
@@ -3891,6 +4195,7 @@ function init(){
   $('stockHeightHost').appendChild(makeChoice('stockHeight', STOCK_HEIGHTS, 'Enter height in cm', null, true));
   writeChoice('stockHeight', STOCK_HEIGHT_DEFAULT);
   initLaser();
+  initMeasure();
   $('palletSizeHost').appendChild(makeChoice('palletSize', PALLET_SIZES, 'Enter size in cm'));
   writeChoice('palletSize', PALLET_SIZE_DEFAULT);
   writePalletCount('');
