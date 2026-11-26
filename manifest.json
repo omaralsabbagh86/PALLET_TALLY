@@ -1,6 +1,6 @@
 {
   "id": "/PALLET_TALLY/",
-  "name": "Pallet Tally V13 — Delivery Pallet Count",
+  "name": "Pallet Tally V14 — Delivery Pallet Count",
   "short_name": "Pallet Tally",
   "description": "Records the physical pallet count of deliveries, with barcode scanning and Leica DISTO laser measurement.",
   "start_url": ".",
