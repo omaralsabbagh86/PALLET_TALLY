@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#12161A">
-<title>Pallet Tally V20</title>
+<title>Pallet Tally V21</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -650,7 +650,7 @@ body.ar-active .bottomnav{visibility:hidden;}
 <body>
 <div class="topbar">
   <div class="eyebrow"><span class="dot"></span> OFFLINE · LOCAL DEVICE STORAGE</div>
-  <h1 id="appTitle">Pallet Tally V20</h1>
+  <h1 id="appTitle">Pallet Tally V21</h1>
 </div>
 
 <div class="app-banner" id="appBanner">
@@ -993,8 +993,9 @@ body.ar-active .bottomnav{visibility:hidden;}
       <button class="btn small ghost hidden" id="arAgain" type="button">Measure again</button>
     </div>
     <div class="ar-hint">Move the phone side to side first, then stand back 2&ndash;3 m
-      with the top surface in view. Where the floor is found you only aim at the top.
-      The DISTO is still the precise instrument.</div>
+      with the top surface in view. Set the floor point on the floor itself, right at
+      the base of the load &mdash; a point set on the load reads short by that much.
+      Swipe the Use button to correct. The DISTO is still the precise instrument.</div>
   </div>
 </div>
 
@@ -1067,7 +1068,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 var APP = window.APP = {};
 
 /* ---------------- constants ---------------- */
-var APP_VERSION = 'V20';
+var APP_VERSION = 'V21';
 var MERGED_COUNT = 9;           // Merged Pallet Manifest 1..9
 var PALLET_COUNT_MAX = 40;      // Physical Pallet Count 0..40 (manual entry above)
 var QR_CHUNK = 700;             // characters of payload per QR code
@@ -3201,7 +3202,6 @@ var lastView = null;
 var lastFrame = null;
 
 var floorPlane = null;     /* {y, area, at} in local space */
-var floorFromSpace = false;/* ARCore gave a floor-aligned origin        */
 var floorSrc = '';         /* which source the current floor came from  */
 var sweep = [];            /* every height seen, for the floor estimate */
 var adjustCm = 0;          /* thumb correction on the frozen figure     */
@@ -3577,11 +3577,17 @@ function sweptFloor(){
 }
 
 /* Best available floor height, and a note of where it came from. */
-/* Only a reference ARCore stands behind is allowed to drive the
-   one-press flow. The sweep advises, it does not decide. */
+/* A DETECTED plane is a surface ARCore has actually seen, and may drive
+   the one-press flow. Nothing else may.
+
+   V20 also accepted the origin of a floor-aligned reference space, which
+   is ARCore's own guess at floor height rather than a surface it saw. That
+   guess is routinely a few centimetres out and it shifts while tracking
+   settles, and because the user never aims at it, aiming carefully cannot
+   fix it. It made every reading worse. The sweep is advisory for the same
+   reason: a guess does not get to decide the number. */
 function floorY(){
   if(floorPlane){ floorSrc = 'plane'; return floorPlane.y; }
-  if(floorFromSpace){ floorSrc = 'level'; return 0; }
   floorSrc = '';
   return null;
 }
@@ -3611,10 +3617,9 @@ function liveFloor(){
 function currentMethod(){
   if(mode !== 'height') return 'point to point';
   var f = liveFloor();
-  var name = floorSrc === 'plane' ? 'floor plane'
-           : floorSrc === 'swept' ? 'swept floor'
-           : floorSrc === 'level' ? 'floor level' : '';
-  if(f && f.auto && name) return name + (topPlane ? ' to top plane' : ' to point');
+  if(f && f.auto && floorSrc === 'plane'){
+    return 'floor plane' + (topPlane ? ' to top plane' : ' to point');
+  }
   if(topPlane) return 'point to top plane';
   return 'point to point';
 }
@@ -3652,7 +3657,8 @@ function render(){
       return '<span class="' + (c[0] ? 'y' : 'n') + '">'
            + (c[0] ? '\u2713' : '\u2717') + ' ' + c[1] + '</span>';
     }).concat(['<span class="' + (floorSrc ? 'y' : 'n') + '">floor: '
-      + (floorSrc || (sweptFloor() != null ? 'by hand, checked' : 'set by hand'))
+      + (floorSrc === 'plane' ? 'plane'
+         : (sweptFloor() != null ? 'by hand, checked' : 'by hand'))
       + '</span>']).join(' \u00B7 ');
   }
 
@@ -3951,7 +3957,6 @@ function supported(){
 
 function noteFeatures(s){
   feat = { anchors: false, planes: false, depth: false, light: false };
-  floorFromSpace = false;
   var list = null;
   try { list = s.enabledFeatures; } catch(e){}
   if(list && list.length != null){
@@ -3991,7 +3996,7 @@ function start(){
   var opts = {
     requiredFeatures: ['hit-test'],
     optionalFeatures: ['anchors', 'plane-detection', 'depth-sensing',
-                       'light-estimation', 'local-floor']
+                       'light-estimation']
   };
   if(overlay){
     opts.optionalFeatures = opts.optionalFeatures.concat(['dom-overlay']);
@@ -4013,22 +4018,10 @@ function start(){
       canvas = null; gl = null;
     });
     try { s.updateRenderState({ baseLayer: new XRWebGLLayer(s, gl) }); } catch(e){}
-    /* A floor-aligned origin gives the floor height for nothing, which
-       matters on a phone where plane detection never arrives. Only trusted
-       when the session actually lists it as granted. */
-    var wantFloor = false;
-    try {
-      var ef = s.enabledFeatures;
-      wantFloor = !!(ef && ef.length != null
-                     && Array.prototype.indexOf.call(ef, 'local-floor') >= 0);
-    } catch(e){ wantFloor = false; }
-
-    return (wantFloor
-        ? s.requestReferenceSpace('local-floor').then(function(sp){
-            floorFromSpace = true; return sp;
-          }, function(){ floorFromSpace = false; return s.requestReferenceSpace('local'); })
-        : s.requestReferenceSpace('local')
-      ).then(function(space){
+    /* 'local' and nothing else. A floor-aligned origin would hand back
+       ARCore's estimate of floor height, and measuring down to an estimate
+       is what cost V20 its accuracy. */
+    return s.requestReferenceSpace('local').then(function(space){
       localSpace = space;
       return s.requestReferenceSpace('viewer');
     }).then(function(viewer){
