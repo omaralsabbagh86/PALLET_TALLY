@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#12161A">
-<title>Pallet Tally V18</title>
+<title>Pallet Tally V20</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -604,12 +604,23 @@ body.ar-active .bottomnav{visibility:hidden;}
 .ar-seg button{background:transparent;border:none;color:#dfe5ea;font-family:var(--mono);
   font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:7px 16px;cursor:pointer;}
 .ar-seg button.on{background:var(--amber);color:var(--amber-ink);}
-.ar-acts{display:flex;gap:10px;align-items:center;}
+.ar-acts{display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;}
+/* Each button owns a column, so the middle one stays in the middle even
+   when one of the side buttons is hidden. */
+#arRedo{grid-column:1;justify-self:start;}
+#arSet{grid-column:2;justify-self:center;}
+#arAgain{grid-column:3;justify-self:end;}
 .ar-hint{font-family:var(--mono);font-size:10.5px;color:#cfd6dd;text-align:center;
   text-shadow:0 1px 3px #000;}
-.ar-fab{background:var(--amber);color:var(--amber-ink);border:none;border-radius:999px;
+.ar-caps{font-family:var(--mono);font-size:9.5px;letter-spacing:.03em;color:#8d97a1;
+  text-align:center;text-shadow:0 1px 3px #000;margin-bottom:6px;}
+.ar-caps .y{color:#6ee7a8;}
+.ar-caps .n{color:#ff9b8a;}
+.ar-fab{touch-action:none;user-select:none;-webkit-user-select:none;
+  background:var(--amber);color:var(--amber-ink);border:none;border-radius:999px;
   font-family:var(--cond);text-transform:uppercase;letter-spacing:.06em;font-size:16px;
-  padding:14px 26px;box-shadow:0 8px 24px rgba(0,0,0,.55);cursor:pointer;z-index:4;}
+  padding:14px 26px;box-shadow:0 8px 24px rgba(0,0,0,.55);cursor:ns-resize;z-index:4;}
+.ar-fab.nudged{box-shadow:0 8px 24px rgba(0,0,0,.55),0 0 0 3px rgba(110,231,168,.65);}
 .ar-fab.hidden{display:none;}
 
 /* ---------- Install banner ---------- */
@@ -639,7 +650,7 @@ body.ar-active .bottomnav{visibility:hidden;}
 <body>
 <div class="topbar">
   <div class="eyebrow"><span class="dot"></span> OFFLINE · LOCAL DEVICE STORAGE</div>
-  <h1 id="appTitle">Pallet Tally V18</h1>
+  <h1 id="appTitle">Pallet Tally V20</h1>
 </div>
 
 <div class="app-banner" id="appBanner">
@@ -970,15 +981,16 @@ body.ar-active .bottomnav{visibility:hidden;}
     </div>
   </div>
   <div class="ar-bottom">
+    <div class="ar-caps" id="arCaps"></div>
     <div class="ar-seg" id="arSeg">
       <button class="on" data-mode="height" type="button">Height</button>
       <button data-mode="direct" type="button">Direct</button>
     </div>
     <div class="ar-takes" id="arTakes"></div>
     <div class="ar-acts">
+      <button class="btn small ghost" id="arRedo" type="button">Start over</button>
       <button class="btn primary" id="arSet" type="button">Set floor point</button>
       <button class="btn small ghost hidden" id="arAgain" type="button">Measure again</button>
-      <button class="btn small ghost" id="arRedo" type="button">Start over</button>
     </div>
     <div class="ar-hint">Move the phone side to side first, then stand back 2&ndash;3 m
       with the top surface in view. Where the floor is found you only aim at the top.
@@ -1055,7 +1067,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 var APP = window.APP = {};
 
 /* ---------------- constants ---------------- */
-var APP_VERSION = 'V18';
+var APP_VERSION = 'V20';
 var MERGED_COUNT = 9;           // Merged Pallet Manifest 1..9
 var PALLET_COUNT_MAX = 40;      // Physical Pallet Count 0..40 (manual entry above)
 var QR_CHUNK = 700;             // characters of payload per QR code
@@ -3189,6 +3201,11 @@ var lastView = null;
 var lastFrame = null;
 
 var floorPlane = null;     /* {y, area, at} in local space */
+var floorFromSpace = false;/* ARCore gave a floor-aligned origin        */
+var floorSrc = '';         /* which source the current floor came from  */
+var sweep = [];            /* every height seen, for the floor estimate */
+var adjustCm = 0;          /* thumb correction on the frozen figure     */
+var justDragged = false;
 var topPlane = null;       /* plane under the reticle, if any */
 var method = '';           /* how the live reading is being made */
 var depthGap = null;       /* metres of disagreement, when known */
@@ -3506,6 +3523,17 @@ function problem(a, b){
   return '';
 }
 
+/* The figure on the button, including any thumb correction. */
+function frozenCm(){
+  if(!frozen) return 0;
+  return Math.max(1, Number(showCm(frozen.value)) + adjustCm);
+}
+function nudge(by){
+  if(!frozen) return;
+  adjustCm = Math.max(1 - Number(showCm(frozen.value)), adjustCm + by);
+  render();
+}
+
 function result(){
   if(!takes.length) return null;
   var med = median(takes);
@@ -3534,20 +3562,79 @@ function liveTop(){
   }
   return { x: current.x, y: current.y, z: current.z, snapped: false };
 }
+/* The low end of everything seen while the phone was swept about. Only
+   trustworthy once the sweep has actually covered a range of heights:
+   aimed at the top of a stack the whole time, the lowest point seen is the
+   top of the stack. */
+function sweptFloor(){
+  if(sweep.length < 60) return null;
+  var s = sweep.slice().sort(function(a, b){ return a - b; });
+  if(s[s.length - 1] - s[0] < 0.40) return null;
+  /* the low cluster has to be flat: a floor is, a table top is not */
+  var decile = Math.max(3, Math.floor(s.length * 0.1));
+  if(s[decile] - s[0] > 0.10) return null;
+  return s[Math.floor(s.length * 0.05)];
+}
+
+/* Best available floor height, and a note of where it came from. */
+/* Only a reference ARCore stands behind is allowed to drive the
+   one-press flow. The sweep advises, it does not decide. */
+function floorY(){
+  if(floorPlane){ floorSrc = 'plane'; return floorPlane.y; }
+  if(floorFromSpace){ floorSrc = 'level'; return 0; }
+  floorSrc = '';
+  return null;
+}
+
+/* How far above the lowest flat surface seen the hand-set floor point sits.
+   More than a few centimetres and it is probably on the load, not the floor
+   - which reads short by exactly that much. */
+function floorPointGap(){
+  if(!pointA || floorSrc) return null;
+  var sw = sweptFloor();
+  if(sw == null) return null;
+  /* Omar's own case was 4 cm, so the threshold has to sit below that.
+     Phrased as "may be" because the sweep's own floor can sit a
+     centimetre or two low. */
+  var gap = pointA.y - sw;
+  return gap > 0.035 ? gap : null;
+}
+
 function liveFloor(){
   if(pointA) return pointA;
-  if(mode === 'height' && floorPlane && current){
-    return { x: current.x, y: floorPlane.y, z: current.z, auto: true };
+  if(mode === 'height' && current){
+    var fy = floorY();
+    if(fy != null) return { x: current.x, y: fy, z: current.z, auto: true };
   }
   return null;
 }
 function currentMethod(){
   if(mode !== 'height') return 'point to point';
   var f = liveFloor();
-  if(f && f.auto && topPlane) return 'floor plane to top plane';
-  if(f && f.auto) return 'floor plane to point';
+  var name = floorSrc === 'plane' ? 'floor plane'
+           : floorSrc === 'swept' ? 'swept floor'
+           : floorSrc === 'level' ? 'floor level' : '';
+  if(f && f.auto && name) return name + (topPlane ? ' to top plane' : ' to point');
   if(topPlane) return 'point to top plane';
   return 'point to point';
+}
+
+/* Warn when the floor point looks like it is sitting on the load, and say
+   what the reading would have been from the floor. */
+function floorGapNote(){
+  var gap = floorPointGap();
+  if(gap == null) return '';
+  var cm = Math.round(gap * 100);
+  var alt = '';
+  var b = pointB || current;
+  if(b){
+    var sw = sweptFloor();
+    alt = ' \u2014 from there it would read '
+        + showCm(Math.abs(b.y - sw)) + ' cm';
+  }
+  return '<span class="sub warn">That floor point is ' + cm
+       + ' cm above the lowest surface seen, so it may be on the load'
+       + alt + '</span>';
 }
 
 function render(){
@@ -3557,6 +3644,18 @@ function render(){
   ret.classList.toggle('live', !!current);
   ret.classList.toggle('steady', !!steady && !frozen);
 
+  var caps = $('arCaps');
+  if(caps){
+    floorY();
+    caps.innerHTML = [[feat.planes, 'planes'], [feat.anchors, 'anchors'],
+                      [feat.depth, 'depth']].map(function(c){
+      return '<span class="' + (c[0] ? 'y' : 'n') + '">'
+           + (c[0] ? '\u2713' : '\u2717') + ' ' + c[1] + '</span>';
+    }).concat(['<span class="' + (floorSrc ? 'y' : 'n') + '">floor: '
+      + (floorSrc || (sweptFloor() != null ? 'by hand, checked' : 'set by hand'))
+      + '</span>']).join(' \u00B7 ');
+  }
+
   var r = result();
   takesEl.textContent = (r && r.n > 1)
     ? r.n + ' takes \u00B7 median ' + showCm(r.value) + ' cm \u00B7 range '
@@ -3565,13 +3664,18 @@ function render(){
 
   if(frozen){
     var warn = (pointA && pointB) ? problem(pointA, pointB) : '';
-    out.innerHTML = '<span class="big">' + showCm(frozen.value) + ' cm</span>'
+    out.innerHTML = '<span class="big">' + frozenCm() + ' cm</span>'
       + '<span class="sub">' + (mode === 'height' ? 'vertical height' : 'straight line')
       + ' \u00B7 ' + frozen.value.toFixed(3) + ' m'
       + ((r && r.n > 1) ? ' \u00B7 median of ' + r.n : '')
-      + (method ? ' \u00B7 ' + method : '') + '</span>'
-      + (warn ? '<span class="sub warn">' + warn + '</span>' : '');
-    fab.textContent = 'Use ' + showCm(frozen.value) + ' cm';
+      + (method ? ' \u00B7 ' + method : '')
+      + (adjustCm ? ' \u00B7 ' + (adjustCm > 0 ? '+' : '') + adjustCm + ' cm by hand' : '')
+      + '</span>'
+      + '<span class="sub">swipe the button up or down to adjust</span>'
+      + (warn ? '<span class="sub warn">' + warn + '</span>' : '')
+      + floorGapNote();
+    fab.textContent = 'Use ' + frozenCm() + ' cm';
+    fab.classList.toggle('nudged', !!adjustCm);
     fab.classList.remove('hidden');
     again.classList.remove('hidden');
     set.disabled = true;
@@ -3646,7 +3750,8 @@ function render(){
       out.innerHTML = '<span class="big">' + showCm(m) + ' cm</span>'
         + '<span class="sub">aim at the top surface of the load, not the front face</span>'
         + quality + depthWarn + condWarn
-        + (warn2 ? '<span class="sub warn">' + warn2 + '</span>' : '');
+        + (warn2 ? '<span class="sub warn">' + warn2 + '</span>' : '')
+        + floorGapNote();
     } else {
       out.innerHTML = '<span class="sub">Lost tracking \u2014 move the phone slowly</span>';
     }
@@ -3702,6 +3807,9 @@ function onFrame(t, frame){
   } else {
     current = null; spread = 0; steady = false;
   }
+
+  if(current) sweep.push(current.y);
+  if(sweep.length > 900) sweep = sweep.slice(-600);
 
   readPlanes(frame);
   readDepth(frame);
@@ -3765,7 +3873,7 @@ function capture(){
 
 function again(){
   dropAnchors();
-  pointA = null; pointB = null; frozen = null;
+  pointA = null; pointB = null; frozen = null; adjustCm = 0;
   samples = []; current = null; steady = false;
   render();
 }
@@ -3775,6 +3883,7 @@ function reset(){
   pointA = null; pointB = null; frozen = null; takes = [];
   samples = []; current = null; steady = false; spread = 0;
   floorPlane = null; topPlane = null; method = ''; depthGap = null; ambient = null;
+  adjustCm = 0; sweep = []; floorSrc = '';
   warm = { moved: 0, hits: 0, from: null, ready: false };
   render();
 }
@@ -3792,14 +3901,47 @@ function stop(){
 }
 
 function useReading(){
+  if(justDragged){ justDragged = false; return; }
   var r = result();
   if(!r) return;
   var raw = r.value;
   var f = (APP.Calib && APP.Calib.factor()) || 1;
-  var corrected = raw * f;
-  var cm = toCm(corrected);
-  if(onImport) onImport(cm, corrected, mode, r.n, method, raw, f);
+  var cm = frozen ? frozenCm() : toCm(raw * f);
+  var hand = adjustCm;
+  if(onImport) onImport(String(cm), Number(cm) / 100, mode, r.n, method, raw, f, hand);
   stop();
+}
+
+/* Dragging the button up or down walks the figure a centimetre at a time.
+   A tap with no movement is still just "use it". */
+function bindFab(){
+  var fab = $('arUse');
+  if(!fab || fab.__bound) return;
+  fab.__bound = true;
+  var drag = null;
+  fab.addEventListener('pointerdown', function(e){
+    if(!frozen) return;
+    drag = { y: e.clientY, base: adjustCm, moved: false };
+    try { fab.setPointerCapture(e.pointerId); } catch(err){}
+  });
+  fab.addEventListener('pointermove', function(e){
+    if(!drag) return;
+    var dy = drag.y - e.clientY;
+    if(Math.abs(dy) > 5) drag.moved = true;
+    var want = drag.base + Math.round(dy / 7);
+    if(want !== adjustCm){
+      adjustCm = Math.max(1 - Number(showCm(frozen.value)), want);
+      render();
+    }
+  });
+  function finish(){
+    if(!drag) return;
+    justDragged = drag.moved;
+    drag = null;
+    if(justDragged) setTimeout(function(){ justDragged = false; }, 350);
+  }
+  fab.addEventListener('pointerup', finish);
+  fab.addEventListener('pointercancel', function(){ drag = null; });
 }
 
 function supported(){
@@ -3809,6 +3951,7 @@ function supported(){
 
 function noteFeatures(s){
   feat = { anchors: false, planes: false, depth: false, light: false };
+  floorFromSpace = false;
   var list = null;
   try { list = s.enabledFeatures; } catch(e){}
   if(list && list.length != null){
@@ -3848,7 +3991,7 @@ function start(){
   var opts = {
     requiredFeatures: ['hit-test'],
     optionalFeatures: ['anchors', 'plane-detection', 'depth-sensing',
-                       'light-estimation']
+                       'light-estimation', 'local-floor']
   };
   if(overlay){
     opts.optionalFeatures = opts.optionalFeatures.concat(['dom-overlay']);
@@ -3870,7 +4013,22 @@ function start(){
       canvas = null; gl = null;
     });
     try { s.updateRenderState({ baseLayer: new XRWebGLLayer(s, gl) }); } catch(e){}
-    return s.requestReferenceSpace('local').then(function(space){
+    /* A floor-aligned origin gives the floor height for nothing, which
+       matters on a phone where plane detection never arrives. Only trusted
+       when the session actually lists it as granted. */
+    var wantFloor = false;
+    try {
+      var ef = s.enabledFeatures;
+      wantFloor = !!(ef && ef.length != null
+                     && Array.prototype.indexOf.call(ef, 'local-floor') >= 0);
+    } catch(e){ wantFloor = false; }
+
+    return (wantFloor
+        ? s.requestReferenceSpace('local-floor').then(function(sp){
+            floorFromSpace = true; return sp;
+          }, function(){ floorFromSpace = false; return s.requestReferenceSpace('local'); })
+        : s.requestReferenceSpace('local')
+      ).then(function(space){
       localSpace = space;
       return s.requestReferenceSpace('viewer');
     }).then(function(viewer){
@@ -3878,6 +4036,7 @@ function start(){
       return s.requestHitTestSource({ space: viewer });
     }).then(function(src){
       hitSource = src;
+      bindFab();
       if(typeof s.requestLightProbe === 'function'){
         s.requestLightProbe().then(function(probe){ lightProbe = probe; },
                                    function(){ lightProbe = null; });
@@ -3914,6 +4073,9 @@ APP.Measure = {
              top: topPlane ? topPlane.y : null,
              depthGap: depthGap,
              anchored: !!(pointA && pointA.anchor),
+             floorSrc: floorSrc, floorLevel: floorY(), adjustCm: adjustCm,
+             sweptFloor: sweptFloor(), floorGap: floorPointGap(),
+             shownCm: frozen ? frozenCm() : null,
              ambient: ambient, dark: tooDark(), range: aimRange(),
              confidence: confidenceCm(),
              calibrated: !!(APP.Calib && APP.Calib.active()),
@@ -3924,6 +4086,8 @@ APP.Measure = {
     median: median, project: project, problem: problem,
     polyArea: polyArea, polyHas: polyHas, polyNear: polyNear,
     polyEdgeGap: polyEdgeGap, applyMat: applyMat, confidenceCm: confidenceCm,
+    sweptFloor: sweptFloor, nudge: nudge, frozenCm: frozenCm,
+    floorPointGap: floorPointGap,
     forceWarm: function(){ warm.ready = true; }
   }
 };
@@ -5220,7 +5384,7 @@ function showLaserDiagnostics(){
 
 function initMeasure(){
   var M = APP.Measure, btn = $('arBtn');
-  M.onImport(function(cm, m, mode, takes, how, raw, factor){
+  M.onImport(function(cm, m, mode, takes, how, raw, factor, hand){
     writeChoice('stockHeight', cm);
     pendingCam = { raw: (raw != null ? raw : m), at: Date.now() };
     $('laserLast').textContent = 'Camera measured ' + m.toFixed(3) + ' m → ' + cm
@@ -5228,9 +5392,13 @@ function initMeasure(){
       + (takes > 1 ? ', median of ' + takes : '')
       + (how ? ', ' + how : '')
       + (factor && factor !== 1 ? ', calibrated ×' + factor.toFixed(3) : '')
+      + (hand ? ', ' + (hand > 0 ? '+' : '') + hand + ' cm by hand' : '')
       + ') · '
       + APP.formatDateTime(new Date().toISOString());
     APP.toast('Stock height ' + cm + ' cm from the camera');
+    /* A correction made by thumb is a reference measurement: he moved it
+       to the figure he believes. Worth keeping as a calibration pair. */
+    if(hand) setTimeout(function(){ offerCalibration(Number(cm) / 100); }, 400);
   });
   $('arClose').addEventListener('click', function(){ M.stop(); });
   $('arSet').addEventListener('click', function(){ M.capture(); });
