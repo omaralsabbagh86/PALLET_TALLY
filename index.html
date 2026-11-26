@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#12161A">
-<title>Pallet Tally V14</title>
+<title>Pallet Tally V18</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -215,7 +215,11 @@ body{display:flex;flex-direction:column;}
 /* ---------- Modal (confirm) ---------- */
 .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:60;padding:24px;}
 .modal-backdrop.show{display:flex;}
-.modal{background:var(--surface-raised);border:1px solid var(--border);border-radius:10px;padding:18px;width:100%;max-width:320px;}
+.modal{background:var(--surface-raised);border:1px solid var(--border);border-radius:10px;padding:18px;width:100%;max-width:320px;
+  display:flex;flex-direction:column;max-height:88vh;}
+#modalTitle{flex:0 0 auto;}
+#modalBody{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;}
+#modalRow{flex:0 0 auto;padding-top:12px;}
 .modal h3{font-family:var(--cond);text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px;font-size:16px;}
 .modal p{font-family:var(--mono);font-size:12px;color:var(--text-mid);margin:0 0 16px;line-height:1.5;}
 .modal .row{display:flex;gap:8px;}
@@ -477,6 +481,71 @@ select:disabled,option:disabled{color:#5B646C;}
 .mf select{font-size:12px;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--text-mid) 50%),linear-gradient(135deg,var(--text-mid) 50%,transparent 50%);background-position:calc(100% - 16px) center,calc(100% - 11px) center;background-size:5px 5px,5px 5px;background-repeat:no-repeat;}
 .mf-morehint{font-family:var(--mono);font-size:10.5px;color:var(--text-low);text-align:center;padding:2px 0 8px;}
 .panel.open .mf-morehint{display:none;}
+
+/* ---- Bluetooth scanner status + in-app keypad ---- */
+.wedge-pill{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);
+  font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;padding:2px 7px;
+  border-radius:9px;border:1px solid var(--border);color:#8d97a1;white-space:nowrap;}
+.wedge-pill .dot{width:6px;height:6px;border-radius:50%;background:#6b7580;}
+.wedge-pill.live{color:#6ee7a8;border-color:rgba(110,231,168,.45);}
+.wedge-pill.live .dot{background:#6ee7a8;box-shadow:0 0 6px rgba(110,231,168,.9);}
+.kp-chip{position:fixed;right:12px;bottom:calc(var(--nav-height, 64px) + 58px);z-index:60;display:none;align-items:center;
+  gap:6px;padding:9px 13px;border-radius:22px;border:1px solid var(--border);
+  background:#1b2026;color:var(--amber);font-family:var(--cond);font-size:13px;
+  box-shadow:0 6px 18px rgba(0,0,0,.55);cursor:pointer;}
+.kp-chip.show{display:inline-flex;}
+.kp-back{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:120;display:none;
+  align-items:flex-end;justify-content:center;}
+.kp-back.show{display:flex;}
+.kp{width:100%;max-width:540px;background:#13171c;border-top:1px solid var(--border);
+  border-radius:14px 14px 0 0;padding:10px 8px calc(10px + env(safe-area-inset-bottom));}
+.kp-top{display:flex;align-items:center;gap:8px;padding:2px 6px 9px;}
+.kp-top .lbl{font-family:var(--mono);font-size:10px;color:#8d97a1;text-transform:uppercase;
+  letter-spacing:.05em;flex:0 0 auto;}
+.kp-top .val{flex:1 1 auto;font-family:var(--mono);font-size:15px;color:#fff;
+  background:#0d1013;border:1px solid var(--border);border-radius:7px;padding:7px 9px;
+  min-height:19px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.kp-row{display:flex;gap:5px;margin-bottom:5px;justify-content:center;}
+.kp-k{flex:1 1 0;min-width:0;height:42px;border-radius:7px;border:1px solid var(--border);
+  background:#20262d;color:#e9edf1;font-family:var(--cond);font-size:17px;
+  display:flex;align-items:center;justify-content:center;user-select:none;cursor:pointer;}
+.kp-k:active{background:#2c343d;}
+.kp-k.wide{flex:2 1 0;}
+.kp-k.go{background:var(--amber);color:#121212;border-color:var(--amber);font-weight:600;}
+.kp-k.dim{color:#9aa4ae;font-size:13px;}
+/* ---- command sheet + export layout builder ---- */
+.cmd-sheet{background:#fff;color:#000;padding:12px;border-radius:8px;}
+.cmd-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;}
+.cmd-cell{border:1px solid #bbb;border-radius:6px;padding:7px 6px 5px;text-align:center;
+  break-inside:avoid;}
+.cmd-cell .cap{font-family:var(--cond);font-size:12px;font-weight:600;color:#000;
+  margin-bottom:3px;letter-spacing:.02em;}
+.cmd-cell .cod{font-family:var(--mono);font-size:8.5px;color:#444;margin-top:2px;}
+.cmd-cell svg{width:100%;height:42px;display:block;}
+.map-tbl{width:100%;border-collapse:collapse;font-size:12px;}
+.map-tbl td{padding:4px 3px;border-bottom:1px solid var(--border);vertical-align:middle;}
+.map-tbl td.h{font-family:var(--mono);font-size:11px;color:var(--text-hi);
+  max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.map-tbl select{width:100%;font-size:11.5px;padding:6px 7px;background:#0d1013;
+  color:var(--text-hi);border:1px solid var(--border);border-radius:6px;}
+.map-tbl select:focus{outline:none;border-color:var(--amber);}
+textarea.wedge-test{resize:vertical;line-height:1.45;}
+.map-none{color:#8d97a1;font-size:12px;}
+@media print{
+  body > *{display:none !important;}
+  body > .modal-backdrop{display:block !important;position:static !important;
+    background:#fff !important;}
+  .modal{max-height:none !important;box-shadow:none !important;border:none !important;
+    background:#fff !important;display:block !important;}
+  #modalBody{overflow:visible !important;max-height:none !important;}
+  #modalRow, #modalTitle{display:none !important;}
+  .cmd-grid{grid-template-columns:repeat(3,1fr);}
+}
+.wedge-test{width:100%;font-family:var(--mono);font-size:13px;box-sizing:border-box;
+  background:#0d1013;color:var(--text-hi);border:1px solid var(--border);
+  border-radius:8px;padding:11px 12px;}
+.wedge-test:focus{outline:none;border-color:var(--amber);}
+.wedge-test::placeholder{color:#6b7580;}
 .mf-merge{display:flex;align-items:center;gap:8px;margin-top:6px;}
 .mf-mlabel{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-low);min-width:44px;}
 .mf-merge .choice{flex:1;min-width:0;}
@@ -570,7 +639,7 @@ body.ar-active .bottomnav{visibility:hidden;}
 <body>
 <div class="topbar">
   <div class="eyebrow"><span class="dot"></span> OFFLINE · LOCAL DEVICE STORAGE</div>
-  <h1 id="appTitle">Pallet Tally V14</h1>
+  <h1 id="appTitle">Pallet Tally V18</h1>
 </div>
 
 <div class="app-banner" id="appBanner">
@@ -634,6 +703,7 @@ body.ar-active .bottomnav{visibility:hidden;}
       <div class="panel-head" data-toggle="manifestPanel">
         <span class="ttl">Pallet Manifests</span>
         <span class="sub" id="manifestSummary">0 / 10</span>
+        <span class="wedge-pill" id="wedgePill" title="Bluetooth barcode scanner"><span class="dot"></span><span id="wedgePillTxt">No scanner</span></span>
         <span class="twist">&#9654;</span>
       </div>
       <div class="panel-body" style="padding:10px 10px 2px;">
@@ -755,7 +825,70 @@ body.ar-active .bottomnav{visibility:hidden;}
       </div>
     </div>
 
+    <div class="section-label" style="margin-top:22px;">Camera Calibration</div>
+    <div class="panel open" id="calibPanel">
+      <div class="panel-body">
+        <div class="laser-status" id="calibStatus" style="margin-top:0;display:block;">Not calibrated yet</div>
+        <div class="laser-last" id="calibDetail"></div>
+        <div class="laser-row" style="margin-top:10px;">
+          <button class="btn small" id="calibAdd" type="button">Add a pair</button>
+          <button class="btn small ghost" id="calibReset" type="button">Reset</button>
+        </div>
+        <div class="note" style="margin-top:11px;margin-bottom:0;">
+          The phone has no depth sensor, so ARCore works out scale from motion and
+          is usually off by a steady few per cent. Your DISTO is a real laser, so it
+          can measure that error and cancel it.<br><br>
+          <b>How:</b> measure a pallet with the camera, then press DIST on the DISTO
+          for the same pallet. The app will offer to keep the pair. After two pairs
+          it starts correcting every camera reading, and the AR view shows
+          <b>calibrated &times;</b> with the factor.
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label" style="margin-top:22px;">Bluetooth Barcode Scanner</div>
+    <div class="panel open" id="wedgePanel">
+      <div class="panel-body">
+        <div class="laser-status" id="wedgeStatus2" style="margin-top:0;display:block;">NETUM NT-1200 &mdash; no scanner input seen yet</div>
+        <div class="laser-last" id="wedgeLast2"></div>
+        <div style="margin-top:11px;">
+          <input class="wedge-test" id="wedgeTest" type="text" autocomplete="off" spellcheck="false"
+                 data-nokeypad="1" placeholder="Test box &mdash; tap here, then pull the trigger">
+        </div>
+        <div class="laser-last" id="wedgeTestOut"></div>
+        <div class="laser-row" style="margin-top:12px;">
+          <button class="btn small" id="cmdSheetBtn" type="button">Command barcodes</button>
+          <span class="laser-status" style="display:inline;">Print and scan to control the app</span>
+        </div>
+        <div class="laser-row" style="margin-top:12px;">
+          <span class="laser-status" style="display:inline;">On-screen keypad</span>
+          <select id="keypadMode" style="max-width:190px;">
+            <option value="auto">Auto &mdash; when a scanner is paired</option>
+            <option value="always">Always open on tap</option>
+            <option value="chip">Button only</option>
+          </select>
+        </div>
+        <div class="note" style="margin-top:12px;margin-bottom:0;">
+          <b>First-time setup on the NT-1200</b><br>
+          1. From the scanner's manual scan <b>Working via Bluetooth</b>, then <b>Basic Mode (HID)</b>.<br>
+          2. On the phone open Bluetooth settings and pair the scanner.<br>
+          3. Make sure its suffix is <b>Enter / CR</b> &mdash; the app uses that to end each code.<br>
+          4. Test above. If letters come out wrong, scan the keyboard-language barcode
+             (<b>$LAN#UK</b> on NETUM units) and test again.<br><br>
+          <b>Android hides the on-screen keyboard while a scanner is paired.</b> That is why
+          the keypad above exists. You can also turn the system keyboard back on under
+          Settings &rarr; General management &rarr; Physical keyboard &rarr; Show on-screen keyboard.<br><br>
+          You do not need to tap a field before scanning. Pull the trigger and the code
+          goes to the next empty manifest, opening Merged 2&ndash;9 only when one lands there.
+        </div>
+      </div>
+    </div>
+
     <div class="section-label" style="margin-top:22px;">Export Records</div>
+    <div class="export-tile">
+      <div class="info"><div class="fmt">Custom layout</div><div class="desc" id="layoutDesc">Match your own workbook columns &middot; none saved yet</div></div>
+      <button class="btn small" id="layoutBtn">Set up</button>
+    </div>
     <div class="export-tile">
       <div class="info"><div class="fmt">CSV</div><div class="desc">Comma-separated · Excel / Sheets compatible</div></div>
       <button class="btn primary small" id="expCsv">Export</button>
@@ -847,8 +980,9 @@ body.ar-active .bottomnav{visibility:hidden;}
       <button class="btn small ghost hidden" id="arAgain" type="button">Measure again</button>
       <button class="btn small ghost" id="arRedo" type="button">Start over</button>
     </div>
-    <div class="ar-hint">Stand back 2&ndash;3 m so the top surface is in view.
-      Roughly &plusmn;2&ndash;5 cm &mdash; the DISTO is far more precise.</div>
+    <div class="ar-hint">Move the phone side to side first, then stand back 2&ndash;3 m
+      with the top surface in view. Where the floor is found you only aim at the top.
+      The DISTO is still the precise instrument.</div>
   </div>
 </div>
 
@@ -874,6 +1008,17 @@ body.ar-active .bottomnav{visibility:hidden;}
     <div class="btn-row"><button class="btn" id="scanTorchBtn" style="min-width:150px;">&#128294; Flash: OFF</button></div>
   </div>
 </div>
+<div class="kp-chip" id="kpChip"><span>&#9000;</span><span>Keypad</span></div>
+<div class="kp-back" id="kpBack">
+  <div class="kp" id="kpPad">
+    <div class="kp-top">
+      <span class="lbl" id="kpLabel">Entry</span>
+      <div class="val" id="kpVal"></div>
+    </div>
+    <div id="kpKeys"></div>
+  </div>
+</div>
+
 <div class="modal-backdrop" id="modalBackdrop">
   <div class="modal wide">
     <h3 id="modalTitle">Title</h3>
@@ -910,7 +1055,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 var APP = window.APP = {};
 
 /* ---------------- constants ---------------- */
-var APP_VERSION = 'V14';
+var APP_VERSION = 'V18';
 var MERGED_COUNT = 9;           // Merged Pallet Manifest 1..9
 var PALLET_COUNT_MAX = 40;      // Physical Pallet Count 0..40 (manual entry above)
 var QR_CHUNK = 700;             // characters of payload per QR code
@@ -1011,6 +1156,7 @@ function primeAudio(){
   } catch(e){}
 }
 APP.primeAudio = primeAudio;
+APP.audioContext = function(){ return audioCtx; };
 
 function beep(){
   if(!audioCtx) return;
@@ -2912,26 +3058,98 @@ APP.Laser = {
 })();
 
 
+
+/* ============================================================
+   PALLET TALLY — camera scale calibration against the DISTO
+   ------------------------------------------------------------
+   ARCore recovers scale from motion, and its scale error on any
+   given phone is mostly a steady multiplier rather than noise.
+   A handful of camera-versus-DISTO pairs is enough to measure
+   that multiplier and cancel it. The median is used so one
+   mis-aimed pair cannot drag the factor, and the result is
+   clamped: a phone that is 30% out is a mistake, not a scale.
+   ============================================================ */
+window.APP = window.APP || {};
+APP.Calib = (function(){
+  'use strict';
+  var KEY = 'pt_calib_v1';
+  var MIN_PAIRS = 2, MAX_PAIRS = 12;
+  var LO = 0.85, HI = 1.15;
+
+  function mid(a){
+    var s = a.slice().sort(function(x, y){ return x - y; });
+    var n = s.length;
+    if(!n) return 1;
+    return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2;
+  }
+  function load(){
+    try {
+      var o = JSON.parse(localStorage.getItem(KEY));
+      return (o && o.pairs && o.pairs.length != null) ? o : { pairs: [] };
+    } catch(e){ return { pairs: [] }; }
+  }
+  function save(o){ try { localStorage.setItem(KEY, JSON.stringify(o)); } catch(e){} }
+
+  function factor(){
+    var ps = load().pairs;
+    if(ps.length < MIN_PAIRS) return 1;
+    var f = mid(ps.map(function(p){ return p.ref / p.cam; }));
+    if(!isFinite(f) || f <= 0) return 1;
+    return Math.min(HI, Math.max(LO, f));
+  }
+  return {
+    factor: factor,
+    active: function(){ return load().pairs.length >= MIN_PAIRS && factor() !== 1; },
+    count: function(){ return load().pairs.length; },
+    pairs: function(){ return load().pairs.slice(); },
+    /* cam and ref in metres */
+    add: function(cam, ref){
+      cam = Number(cam); ref = Number(ref);
+      if(!(cam > 0.05) || !(ref > 0.05)) return false;
+      var r = ref / cam;
+      if(r < 0.5 || r > 2) return false;      /* not a scale error, a mis-aim */
+      var o = load();
+      o.pairs.push({ cam: cam, ref: ref, at: new Date().toISOString() });
+      if(o.pairs.length > MAX_PAIRS) o.pairs = o.pairs.slice(-MAX_PAIRS);
+      save(o);
+      return true;
+    },
+    drop: function(){ var o = load(); o.pairs.pop(); save(o); },
+    reset: function(){ save({ pairs: [] }); },
+    apply: function(m){ return m * factor(); }
+  };
+})();
+
 /* ============================================================
    PALLET TALLY — measure with the camera (WebXR + ARCore)
    ------------------------------------------------------------
-   Two faults showed up measuring a 145 cm stack: every reading
-   came out short, and repeats scattered by 30 cm.
+   V17. The earlier versions used one ARCore facility, the hit
+   test, and stored the result as a bare coordinate. Three things
+   that a good native measuring app does were left on the table,
+   and all three are reachable from the browser:
 
-   The scatter came from sampling a single frame at the instant
-   of the tap. ARCore's hit point jitters by a couple of
-   centimetres, and occasionally throws a wild one. So points are
-   now the median of a rolling half second of hits, capture is
-   blocked until that window is steady, and the live spread is
-   shown so a bad moment is visible before it is committed.
+   ANCHORS. A raw coordinate is expressed in a reference space
+   whose origin ARCore quietly corrects as it learns the room.
+   Between setting the floor point and the top point, the stored
+   floor point therefore slides. An anchor is owned by ARCore and
+   moves with its corrections, so it stays on the spot it was put.
 
-   The short readings came from where the ray lands. Aimed at the
-   top edge of a stack from standing height, it grazes the front
-   face and reports a point below the real top. Nothing in the
-   maths can recover that, so the app now measures the vertical
-   gap from the floor plane, warns when the second point sits
-   suspiciously far from the first horizontally or barely above
-   it, and says plainly where to stand.
+   PLANES. Aimed at the top edge of a stack from standing height,
+   the ray grazes the front face and reports a point below the
+   real top: every reading short, which is the pattern Omar saw.
+   Detected planes give the floor and the top surface as surfaces
+   rather than as single rays, so the height is the gap between
+   two planes and the grazing error disappears. With a floor plane
+   found there is also nothing to set by hand - aim at the top and
+   press once.
+
+   DEPTH. ARCore's depth buffer says how far away the pixel under
+   the reticle really is. Comparing it with the hit distance
+   catches a ray that landed on something else entirely.
+
+   Everything degrades cleanly: on a phone or a Chrome build
+   without planes, depth or anchors it falls back to the V13/V14
+   behaviour, which is still median-filtered and stability-gated.
    ============================================================ */
 (function(){
 'use strict';
@@ -2943,17 +3161,39 @@ var MIN_SAMPLES = 8;       /* fewest hits before a point may be set */
 var STEADY_M    = 0.015;   /* 1.5 cm spread counts as holding still */
 var MAX_HIT_M   = 12;      /* beyond this the hit is not the pallet */
 var MAX_HORIZ_M = 1.2;     /* floor and top points should be close  */
+var WARMUP_M    = 0.07;    /* parallax the camera must travel first */
+var WARMUP_HITS = 20;      /* or this many tracked frames           */
+var PLANE_MIN_A = 0.09;    /* ignore scraps smaller than 30x30 cm   */
+var FLOOR_SLACK = 0.12;    /* a plane this close to floor level is it */
+var DEPTH_TOL   = 0.25;    /* metres of disagreement tolerated      */
+var DEPTH_FRAC  = 0.12;    /* ...or this share of the distance      */
+var EDGE_SLACK  = 0.14;    /* accept the top plane this far past its rim */
+var NEAR_M      = 0.8;     /* closer than this and the view is cramped   */
+var FAR_M       = 5.0;     /* past this the error grows fast             */
+var DARK_SH     = 0.45;    /* ambient below this reads as a dim bay      */
+var FLOOR_TTL   = 1500;    /* forget a floor ARCore stopped reporting */
 
-var session = null, hitSource = null, localSpace = null, gl = null, canvas = null;
+var session = null, hitSource = null, localSpace = null, viewerSpace = null;
+var gl = null, canvas = null;
+var feat = { anchors: false, planes: false, depth: false };
+
 var samples = [];          /* {t,x,y,z} inside the rolling window */
 var current = null;        /* median of the window */
 var spread = 0, steady = false;
-var pointA = null, pointB = null;
-var takes = [];            /* every completed floor-to-top measurement */
+var pointA = null, pointB = null;   /* {x,y,z,anchor?} */
+var takes = [];
 var mode = 'height';
 var frozen = null;
 var onImport = null;
 var lastView = null;
+var lastFrame = null;
+
+var floorPlane = null;     /* {y, area, at} in local space */
+var topPlane = null;       /* plane under the reticle, if any */
+var method = '';           /* how the live reading is being made */
+var depthGap = null;       /* metres of disagreement, when known */
+var warm = { moved: 0, hits: 0, from: null, ready: false };
+var lightProbe = null, ambient = null;
 
 /* ---------------------------------------------------------------- maths */
 function median(nums){
@@ -2963,20 +3203,34 @@ function median(nums){
   return n % 2 ? a[(n - 1) / 2] : (a[n / 2 - 1] + a[n / 2]) / 2;
 }
 function dist3(a, b){
-  return Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y) + (b.z - a.z) * (b.z - a.z));
+  var dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz);
 }
 function vertical(a, b){ return Math.abs(b.y - a.y); }
 function horizontal(a, b){
-  return Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.z - a.z) * (b.z - a.z));
+  var dx = a.x - b.x, dz = a.z - b.z;
+  return Math.sqrt(dx * dx + dz * dz);
 }
 function metres(a, b){ return mode === 'height' ? vertical(a, b) : dist3(a, b); }
 function toCm(m){ return APP.PT.metresToCm(m); }
+function calFactor(){ return (APP.Calib && APP.Calib.factor()) || 1; }
+/* What the readout shows is what Use will write, calibration included. */
+function showCm(m){ return toCm(m * calFactor()); }
 
-/* The median of each axis, plus how far the samples stray from it. A single
-   wild hit moves a median far less than it moves a mean. */
+/* WebXR hands out column-major 4x4s. */
+function applyMat(m, p){
+  var x = p.x, y = p.y, z = p.z;
+  return {
+    x: m[0] * x + m[4] * y + m[8]  * z + m[12],
+    y: m[1] * x + m[5] * y + m[9]  * z + m[13],
+    z: m[2] * x + m[6] * y + m[10] * z + m[14]
+  };
+}
+
 function summarise(now){
   samples = samples.filter(function(s){ return now - s.t <= SAMPLE_MS; });
-  if(samples.length < 3){ return null; }
+  var n = samples.length;
+  if(!n) return null;
   var mid = {
     x: median(samples.map(function(s){ return s.x; })),
     y: median(samples.map(function(s){ return s.y; })),
@@ -2987,26 +3241,202 @@ function summarise(now){
     var d = dist3(mid, s);
     if(d > worst) worst = d;
   });
-  return { pos: mid, spread: worst, n: samples.length };
+  return { pos: mid, spread: worst, n: n };
 }
 
-/* Project a world point to a pixel on screen, so the line can be drawn in
-   the DOM overlay instead of in WebGL. */
 function project(p, view, w, h){
   var vm = view.transform.inverse.matrix, pm = view.projectionMatrix;
-  var x = p.x, y = p.y, z = p.z;
-  var vx = vm[0] * x + vm[4] * y + vm[8]  * z + vm[12];
-  var vy = vm[1] * x + vm[5] * y + vm[9]  * z + vm[13];
-  var vz = vm[2] * x + vm[6] * y + vm[10] * z + vm[14];
-  var vw = vm[3] * x + vm[7] * y + vm[11] * z + vm[15];
+  var vx = vm[0] * p.x + vm[4] * p.y + vm[8]  * p.z + vm[12];
+  var vy = vm[1] * p.x + vm[5] * p.y + vm[9]  * p.z + vm[13];
+  var vz = vm[2] * p.x + vm[6] * p.y + vm[10] * p.z + vm[14];
+  var vw = vm[3] * p.x + vm[7] * p.y + vm[11] * p.z + vm[15];
   var cx = pm[0] * vx + pm[4] * vy + pm[8]  * vz + pm[12] * vw;
   var cy = pm[1] * vx + pm[5] * vy + pm[9]  * vz + pm[13] * vw;
   var cw = pm[3] * vx + pm[7] * vy + pm[11] * vz + pm[15] * vw;
-  if(!(cw > 1e-4)) return null;                 /* behind the camera */
+  if(!(cw > 1e-4)) return null;
   return { x: (cx / cw * 0.5 + 0.5) * w, y: (1 - (cy / cw * 0.5 + 0.5)) * h };
 }
 
-/* ---------------------------------------------------------------- drawing */
+/* ------------------------------------------------------------- planes */
+function polyArea(poly){
+  var a = 0;
+  for(var i = 0, n = poly.length; i < n; i++){
+    var p = poly[i], q = poly[(i + 1) % n];
+    a += (p.x * q.z) - (q.x * p.z);
+  }
+  return Math.abs(a) / 2;
+}
+function polyHas(poly, x, z){
+  var inside = false;
+  for(var i = 0, j = poly.length - 1; i < poly.length; j = i++){
+    var a = poly[i], b = poly[j];
+    if(((a.z > z) !== (b.z > z))
+       && (x < (b.x - a.x) * (z - a.z) / ((b.z - a.z) || 1e-9) + a.x)) inside = !inside;
+  }
+  return inside;
+}
+
+/* Shortest distance from a point to the outline, so a point a little past
+   the rim still counts as that surface. People aim at the top edge, not at
+   the middle of the top, and falling through to the wall behind the stack
+   is far worse than accepting a point 10 cm out. */
+function polyEdgeGap(poly, x, z){
+  var best = Infinity;
+  for(var i = 0, j = poly.length - 1; i < poly.length; j = i++){
+    var a = poly[i], b = poly[j];
+    var dx = b.x - a.x, dz = b.z - a.z;
+    var len = dx * dx + dz * dz;
+    var t = len ? (((x - a.x) * dx + (z - a.z) * dz) / len) : 0;
+    t = Math.max(0, Math.min(1, t));
+    var px = a.x + t * dx, pz = a.z + t * dz;
+    var d = Math.sqrt((x - px) * (x - px) + (z - pz) * (z - pz));
+    if(d < best) best = d;
+  }
+  return best;
+}
+function polyNear(poly, x, z, slack){
+  return polyHas(poly, x, z) || polyEdgeGap(poly, x, z) <= slack;
+}
+
+/* Floor: the broadest horizontal plane well below the camera.
+   Top: the horizontal plane the reticle is standing over. */
+function readPlanes(frame){
+  if(!feat.planes) return;
+  var set = null;
+  try { set = frame.detectedPlanes; } catch(e){ return; }
+  if(!set || typeof set.forEach !== 'function') return;
+
+  var camY = lastView ? lastView.transform.position.y : 1.5;
+  var best = null, over = null;
+
+  set.forEach(function(plane){
+    if(plane.orientation && plane.orientation !== 'horizontal') return;
+    var pose = null;
+    try { pose = frame.getPose(plane.planeSpace, localSpace); } catch(e){}
+    if(!pose) return;
+    var poly = plane.polygon || [];
+    var area = poly.length > 2 ? polyArea(poly) : 0;
+    if(area < PLANE_MIN_A) return;
+    var y = pose.transform.position.y;
+    /* the floor is the lowest broad surface under the camera; among
+       planes at much the same level the broadest one wins */
+    if(y < camY - 0.35){
+      if(!best || y < best.y - FLOOR_SLACK
+         || (Math.abs(y - best.y) <= FLOOR_SLACK && area > best.area)){
+        best = { y: y, area: area };
+      }
+    }
+    /* is the live aim point standing on this plane? */
+    if(current && poly.length > 2){
+      var inv = pose.transform.inverse.matrix;
+      var lp = applyMat(inv, current);
+      if(Math.abs(lp.y) < 0.18 && polyNear(poly, lp.x, lp.z, EDGE_SLACK)){
+        if(!over || y > over.y) over = { y: y, area: area };
+      }
+    }
+  });
+
+  /* Keep the floor across the frames where ARCore does not re-report it,
+     but let it go if the surface has genuinely been lost. */
+  var now = Date.now();
+  if(best){ best.at = now; floorPlane = best; }
+  else if(floorPlane && now - (floorPlane.at || 0) > FLOOR_TTL) floorPlane = null;
+  topPlane = over;
+}
+
+/* ------------------------------------------------------------- depth */
+function readLight(frame){
+  if(!lightProbe) return;
+  var est = null;
+  try { est = frame.getLightEstimate(lightProbe); } catch(e){ return; }
+  if(!est) return;
+  var sh = est.sphericalHarmonicsCoefficients;
+  if(sh && sh.length >= 3){
+    ambient = (Math.abs(sh[0]) + Math.abs(sh[1]) + Math.abs(sh[2])) / 3;
+  } else if(est.primaryLightIntensity){
+    var i = est.primaryLightIntensity;
+    ambient = (i.x + i.y + i.z) / 3;
+  }
+}
+function tooDark(){ return ambient != null && ambient < DARK_SH; }
+
+function aimRange(){
+  if(!current || !lastView) return null;
+  var c = lastView.transform.position;
+  return dist3({ x: c.x, y: c.y, z: c.z }, current);
+}
+
+/* An honest expectation, not a promise. Plane-to-plane beats a single ray,
+   distance costs roughly a centimetre a metre, the live wobble carries
+   straight through, and a DISTO-calibrated scale takes a slice off. */
+function confidenceCm(){
+  var m = currentMethod();
+  var base = m === 'floor plane to top plane' ? 1.5
+           : (m.indexOf('plane') >= 0 ? 2.5 : 4);
+  var r = aimRange();
+  var cm = base + (r ? r : 2) * 1.0 + Math.round((spread || 0) * 100);
+  if(APP.Calib && APP.Calib.active()) cm *= 0.7;
+  if(tooDark()) cm *= 1.6;
+  return Math.max(1, Math.round(cm));
+}
+
+function readDepth(frame){
+  depthGap = null;
+  if(!feat.depth || !lastView || !current) return;
+  var info = null;
+  try { info = frame.getDepthInformation(lastView); } catch(e){ return; }
+  if(!info || typeof info.getDepthInMeters !== 'function') return;
+
+  var nx = 0.5, nz = 0.5;
+  var m = info.normDepthBufferFromNormView && info.normDepthBufferFromNormView.matrix;
+  if(m){
+    var t = applyMat(m, { x: 0.5, y: 0.5, z: 0 });
+    nx = t.x; nz = t.y;
+  }
+  if(!(nx >= 0 && nx <= 1 && nz >= 0 && nz <= 1)) return;
+  var d = 0;
+  try { d = info.getDepthInMeters(nx, nz); } catch(e){ return; }
+  if(!(d > 0)) return;
+
+  var cam = lastView.transform.position;
+  var hit = dist3({ x: cam.x, y: cam.y, z: cam.z }, current);
+  depthGap = Math.abs(hit - d);
+}
+function depthDisagrees(){
+  if(depthGap == null || !current || !lastView) return false;
+  var cam = lastView.transform.position;
+  var hit = dist3({ x: cam.x, y: cam.y, z: cam.z }, current);
+  return depthGap > Math.max(DEPTH_TOL, hit * DEPTH_FRAC);
+}
+
+/* ------------------------------------------------------------- anchors */
+function anchorAt(frame, pos){
+  if(!feat.anchors || !frame || typeof frame.createAnchor !== 'function'){
+    return Promise.resolve(null);
+  }
+  try {
+    var xf = new XRRigidTransform({ x: pos.x, y: pos.y, z: pos.z });
+    return frame.createAnchor(xf, localSpace).then(function(a){ return a || null; },
+                                                   function(){ return null; });
+  } catch(e){ return Promise.resolve(null); }
+}
+function refreshAnchored(frame){
+  [pointA, pointB].forEach(function(pt){
+    if(!pt || !pt.anchor) return;
+    var pose = null;
+    try { pose = frame.getPose(pt.anchor.anchorSpace, localSpace); } catch(e){}
+    if(!pose) return;
+    var p = pose.transform.position;
+    pt.x = p.x; pt.y = p.y; pt.z = p.z;
+  });
+}
+function dropAnchors(){
+  [pointA, pointB].forEach(function(pt){
+    if(pt && pt.anchor && pt.anchor.delete){ try { pt.anchor.delete(); } catch(e){} }
+  });
+}
+
+/* ------------------------------------------------------------- drawing */
 function hide(el){ el.setAttribute('visibility', 'hidden'); }
 function show(el){ el.setAttribute('visibility', 'visible'); }
 
@@ -3027,7 +3457,6 @@ function drawGuides(){
   var w = box.width, h = box.height;
   if(!w || !h) return;
 
-  /* the circle marks the point the ray actually hit */
   if(current && lastView){
     var c = project(current, lastView, w, h);
     placeReticle(c ? c.x : null, c ? c.y : null);
@@ -3043,45 +3472,37 @@ function drawGuides(){
     var pb = project(pointB, lastView, w, h);
     placeReticle(pb ? pb.x : null, pb ? pb.y : null);
   }
-  if(a){
-    dotA.setAttribute('cx', a.x); dotA.setAttribute('cy', a.y); show(dotA);
-  }
+  if(!a) return;
+  dotA.setAttribute('cx', a.x); dotA.setAttribute('cy', a.y); show(dotA);
   if(!target) return;
   var b = project(target, lastView, w, h);
-  if(!a || !b) return;
+  if(!b) return;
 
-  /* the dotted line between the two points, kept once both are down */
+  if(pointB){ dotB.setAttribute('cx', b.x); dotB.setAttribute('cy', b.y); show(dotB); }
+
   lnD.setAttribute('x1', a.x); lnD.setAttribute('y1', a.y);
   lnD.setAttribute('x2', b.x); lnD.setAttribute('y2', b.y);
   show(lnD);
-  dotB.setAttribute('cx', b.x); dotB.setAttribute('cy', b.y); show(dotB);
 
-  /* in height mode the figure is the vertical gap, so show that leg too */
   if(mode === 'height'){
-    var plumb = project({ x: pointA.x, y: target.y, z: pointA.z }, lastView, w, h);
-    if(plumb){
-      lnV.setAttribute('x1', a.x); lnV.setAttribute('y1', a.y);
-      lnV.setAttribute('x2', plumb.x); lnV.setAttribute('y2', plumb.y);
+    var foot = project({ x: target.x, y: pointA.y, z: target.z }, lastView, w, h);
+    if(foot){
+      lnV.setAttribute('x1', foot.x); lnV.setAttribute('y1', foot.y);
+      lnV.setAttribute('x2', b.x); lnV.setAttribute('y2', b.y);
       show(lnV);
     }
   }
-  var m = metres(pointA, target);
-  lbl.textContent = toCm(m) + ' cm';
-  /* beside the top point rather than mid-line, where the readout sits */
-  var right = b.x < w * 0.62;
-  lbl.setAttribute('x', b.x + (right ? 20 : -20));
-  lbl.setAttribute('y', b.y + 7);
-  lbl.setAttribute('text-anchor', right ? 'start' : 'end');
+  var v = metres(pointA, target);
+  lbl.setAttribute('x', (a.x + b.x) / 2);
+  lbl.setAttribute('y', Math.min(a.y, b.y) - 12);
+  lbl.textContent = showCm(v) + ' cm';
   show(lbl);
 }
 
-/* ---------------------------------------------------------------- warnings */
+/* ------------------------------------------------------------- reading */
 function problem(a, b){
-  if(!a || !b) return '';
-  var up = b.y - a.y;
-  if(up < 0.1) return 'That point is barely above the floor point — the ray may have landed on the floor again.';
-  var off = horizontal(a, b);
-  if(off > MAX_HORIZ_M) return 'That point is ' + off.toFixed(1) + ' m to the side — it may have landed behind the pallet.';
+  if(b.y - a.y < 0.1) return 'That point is barely above the floor point — aim at the top surface';
+  if(horizontal(a, b) > MAX_HORIZ_M) return 'That point is far to the side of the floor point — stand square to the stack';
   return '';
 }
 
@@ -3092,7 +3513,6 @@ function result(){
   return { value: med, n: takes.length, range: hi - lo };
 }
 
-/* ---------------------------------------------------------------- UI */
 function setSeg(next){
   mode = next;
   Array.prototype.forEach.call($('arSeg').children, function(b){
@@ -3106,26 +3526,52 @@ function setSeg(next){
   render();
 }
 
+/* The live point the measurement should use, preferring surfaces. */
+function liveTop(){
+  if(!current) return null;
+  if(mode === 'height' && topPlane){
+    return { x: current.x, y: topPlane.y, z: current.z, snapped: true };
+  }
+  return { x: current.x, y: current.y, z: current.z, snapped: false };
+}
+function liveFloor(){
+  if(pointA) return pointA;
+  if(mode === 'height' && floorPlane && current){
+    return { x: current.x, y: floorPlane.y, z: current.z, auto: true };
+  }
+  return null;
+}
+function currentMethod(){
+  if(mode !== 'height') return 'point to point';
+  var f = liveFloor();
+  if(f && f.auto && topPlane) return 'floor plane to top plane';
+  if(f && f.auto) return 'floor plane to point';
+  if(topPlane) return 'point to top plane';
+  return 'point to point';
+}
+
 function render(){
   var out = $('arReadout'), fab = $('arUse'), set = $('arSet');
   var ret = $('arReticle'), again = $('arAgain'), takesEl = $('arTakes');
 
   ret.classList.toggle('live', !!current);
-  ret.classList.toggle('steady', steady);
+  ret.classList.toggle('steady', !!steady && !frozen);
 
   var r = result();
   takesEl.textContent = (r && r.n > 1)
-    ? r.n + ' takes · median ' + toCm(r.value) + ' cm · range ' + Math.round(r.range * 100) + ' cm'
+    ? r.n + ' takes \u00B7 median ' + showCm(r.value) + ' cm \u00B7 range '
+      + Math.round(r.range * 100 * calFactor()) + ' cm'
     : '';
 
   if(frozen){
-    var warn = problem(pointA, pointB);
-    out.innerHTML = '<span class="big">' + toCm(r.value) + ' cm</span>'
+    var warn = (pointA && pointB) ? problem(pointA, pointB) : '';
+    out.innerHTML = '<span class="big">' + showCm(frozen.value) + ' cm</span>'
       + '<span class="sub">' + (mode === 'height' ? 'vertical height' : 'straight line')
-      + ' · ' + r.value.toFixed(3) + ' m'
-      + (r.n > 1 ? ' · median of ' + r.n : '') + '</span>'
+      + ' \u00B7 ' + frozen.value.toFixed(3) + ' m'
+      + ((r && r.n > 1) ? ' \u00B7 median of ' + r.n : '')
+      + (method ? ' \u00B7 ' + method : '') + '</span>'
       + (warn ? '<span class="sub warn">' + warn + '</span>' : '');
-    fab.textContent = 'Use ' + toCm(r.value) + ' cm';
+    fab.textContent = 'Use ' + showCm(frozen.value) + ' cm';
     fab.classList.remove('hidden');
     again.classList.remove('hidden');
     set.disabled = true;
@@ -3138,29 +3584,71 @@ function render(){
   fab.classList.add('hidden');
   set.classList.remove('hidden');
   again.classList.toggle('hidden', !takes.length);
+
+  /* Nothing ARCore reports is worth trusting before it has parallax. */
+  if(!warm.ready){
+    set.disabled = true;
+    set.textContent = 'Set floor point';
+    out.innerHTML = '<span class="sub">Finding the floor</span>'
+      + '<span class="sub">Move the phone slowly side to side</span>';
+    drawGuides();
+    return;
+  }
+
   set.disabled = !steady;
 
   var quality = current
-    ? '<span class="sub">' + (steady ? 'steady' : 'hold still') + ' · ±'
-      + Math.max(1, Math.round(spread * 100)) + ' cm</span>'
+    ? '<span class="sub">' + (steady ? 'steady' : 'hold still') + ' \u00B7 \u2248\u00B1'
+      + confidenceCm() + ' cm \u00B7 ' + currentMethod()
+      + (APP.Calib && APP.Calib.active()
+         ? ' \u00B7 calibrated \u00D7' + APP.Calib.factor().toFixed(3) : '') + '</span>'
     : '';
+  var depthWarn = depthDisagrees()
+    ? '<span class="sub warn">Depth disagrees with that point \u2014 move slightly '
+      + 'and let it settle</span>'
+    : '';
+  var r0 = aimRange();
+  var condWarn = '';
+  if(tooDark()){
+    condWarn += '<span class="sub warn">Too dim to track well \u2014 more light, '
+             +  'or use the DISTO</span>';
+  }
+  if(r0 != null && r0 < NEAR_M){
+    condWarn += '<span class="sub warn">Too close \u2014 step back so the whole '
+             +  'stack is in view</span>';
+  } else if(r0 != null && r0 > FAR_M){
+    condWarn += '<span class="sub warn">' + r0.toFixed(1) + ' m away \u2014 error '
+             +  'grows past 5 m, move closer</span>';
+  }
+
+  var f = liveFloor(), t = liveTop();
 
   if(!pointA){
-    set.textContent = 'Set floor point';
-    out.innerHTML = current
-      ? '<span class="sub">Aim at the floor right beside the pallet</span>' + quality
-      : '<span class="sub">Move the phone slowly across the floor until the circle locks on</span>';
+    /* A detected floor removes the first tap: aim at the top and press once. */
+    if(f && f.auto && current){
+      set.textContent = 'Measure height';
+      var live = metres(f, t || current);
+      out.innerHTML = '<span class="big">' + showCm(live) + ' cm</span>'
+        + '<span class="sub">floor found \u00B7 aim at the top surface of the load, '
+        + 'not the front face</span>' + quality + depthWarn + condWarn;
+    } else {
+      set.textContent = 'Set floor point';
+      out.innerHTML = current
+        ? '<span class="sub">Aim at the floor right beside the pallet</span>'
+          + quality + depthWarn + condWarn
+        : '<span class="sub">Move the phone slowly across the floor until the circle locks on</span>';
+    }
   } else {
     set.textContent = 'Set top point';
     if(current){
-      var m = metres(pointA, current);
-      var warn2 = problem(pointA, current);
-      out.innerHTML = '<span class="big">' + toCm(m) + ' cm</span>'
+      var m = metres(pointA, t || current);
+      var warn2 = problem(pointA, t || current);
+      out.innerHTML = '<span class="big">' + showCm(m) + ' cm</span>'
         + '<span class="sub">aim at the top surface of the load, not the front face</span>'
-        + quality
+        + quality + depthWarn + condWarn
         + (warn2 ? '<span class="sub warn">' + warn2 + '</span>' : '');
     } else {
-      out.innerHTML = '<span class="sub">Lost tracking — move the phone slowly</span>';
+      out.innerHTML = '<span class="sub">Lost tracking \u2014 move the phone slowly</span>';
     }
   }
   drawGuides();
@@ -3170,6 +3658,7 @@ function render(){
 function onFrame(t, frame){
   if(!session) return;
   session.requestAnimationFrame(onFrame);
+  lastFrame = frame;
   if(gl){
     try {
       var layer = session.renderState && session.renderState.baseLayer;
@@ -3185,6 +3674,8 @@ function onFrame(t, frame){
     var vp = frame.getViewerPose(localSpace);
     if(vp && vp.views && vp.views.length) lastView = vp.views[0];
   } catch(e){}
+
+  refreshAnchored(frame);
 
   if(frozen){ render(); return; }
   if(!hitSource) return;
@@ -3211,40 +3702,87 @@ function onFrame(t, frame){
   } else {
     current = null; spread = 0; steady = false;
   }
+
+  readPlanes(frame);
+  readDepth(frame);
+  readLight(frame);
+
+  /* ARCore needs parallax before anything it reports is worth trusting. */
+  if(!warm.ready && lastView){
+    var cp = lastView.transform.position;
+    if(!warm.from) warm.from = { x: cp.x, y: cp.y, z: cp.z };
+    warm.moved = Math.max(warm.moved, dist3(warm.from, { x: cp.x, y: cp.y, z: cp.z }));
+    if(current) warm.hits++;
+    if((warm.moved >= WARMUP_M && warm.hits >= 5) || warm.hits >= WARMUP_HITS
+       || floorPlane) warm.ready = true;
+  }
+
   render();
 }
 
 /* ---------------------------------------------------------------- actions */
-function capture(){
-  if(!current || frozen || !steady) return;
-  if(!pointA){
-    pointA = { x: current.x, y: current.y, z: current.z };
-    samples = []; current = null; steady = false;
-    render();
-    return;
-  }
-  pointB = { x: current.x, y: current.y, z: current.z };
-  takes.push(metres(pointA, pointB));
+function commit(a, b){
+  takes.push(metres(a, b));
+  method = currentMethod();
   frozen = { value: median(takes) };
   render();
 }
 
-/* Keep the takes so far, clear the points, and measure the same stack again. */
+
+function capture(){
+  if(frozen || !warm.ready) return;
+  if(!current || !steady) return;
+  if(depthDisagrees()) return;
+
+  var f = liveFloor(), tp = liveTop();
+
+  /* A detected floor removes the first tap entirely. */
+  if(!pointA && f && f.auto && tp){
+    pointA = { x: f.x, y: f.y, z: f.z };
+    pointB = { x: tp.x, y: tp.y, z: tp.z };
+    if(lastFrame){
+      anchorAt(lastFrame, pointA).then(function(an){ if(pointA) pointA.anchor = an; });
+      anchorAt(lastFrame, pointB).then(function(an){ if(pointB) pointB.anchor = an; });
+    }
+    commit(pointA, pointB);
+    return;
+  }
+
+  if(!pointA){
+    pointA = { x: current.x, y: current.y, z: current.z };
+    var frameA = lastFrame;
+    if(frameA) anchorAt(frameA, pointA).then(function(an){ if(pointA) pointA.anchor = an; });
+    samples = []; current = null; steady = false;
+    render();
+    return;
+  }
+
+  pointB = tp ? { x: tp.x, y: tp.y, z: tp.z }
+              : { x: current.x, y: current.y, z: current.z };
+  if(lastFrame) anchorAt(lastFrame, pointB).then(function(an){ if(pointB) pointB.anchor = an; });
+  commit(pointA, pointB);
+}
+
 function again(){
+  dropAnchors();
   pointA = null; pointB = null; frozen = null;
   samples = []; current = null; steady = false;
   render();
 }
 
 function reset(){
+  dropAnchors();
   pointA = null; pointB = null; frozen = null; takes = [];
   samples = []; current = null; steady = false; spread = 0;
+  floorPlane = null; topPlane = null; method = ''; depthGap = null; ambient = null;
+  warm = { moved: 0, hits: 0, from: null, ready: false };
   render();
 }
 
 function stop(){
   var s = session;
-  session = null; hitSource = null; localSpace = null; lastView = null;
+  session = null; hitSource = null; localSpace = null; viewerSpace = null;
+  lastView = null; lastFrame = null;
   $('arOverlay').classList.remove('show');
   document.body.classList.remove('ar-active');
   if(s){ try { s.end(); } catch(e){} }
@@ -3256,14 +3794,38 @@ function stop(){
 function useReading(){
   var r = result();
   if(!r) return;
-  var cm = toCm(r.value);
-  if(onImport) onImport(cm, r.value, mode, r.n);
+  var raw = r.value;
+  var f = (APP.Calib && APP.Calib.factor()) || 1;
+  var corrected = raw * f;
+  var cm = toCm(corrected);
+  if(onImport) onImport(cm, corrected, mode, r.n, method, raw, f);
   stop();
 }
 
 function supported(){
   if(!navigator.xr || !navigator.xr.isSessionSupported) return Promise.resolve(false);
   return navigator.xr.isSessionSupported('immersive-ar').catch(function(){ return false; });
+}
+
+function noteFeatures(s){
+  feat = { anchors: false, planes: false, depth: false, light: false };
+  var list = null;
+  try { list = s.enabledFeatures; } catch(e){}
+  if(list && list.length != null){
+    var has = function(n){ return Array.prototype.indexOf.call(list, n) >= 0; };
+    feat.anchors = has('anchors');
+    feat.planes  = has('plane-detection');
+    feat.depth   = has('depth-sensing');
+    feat.light   = has('light-estimation');
+    return;
+  }
+  /* Older builds do not report enabledFeatures; probe instead. */
+  feat.anchors = typeof XRFrame !== 'undefined'
+    && XRFrame.prototype && typeof XRFrame.prototype.createAnchor === 'function';
+  feat.planes = typeof XRFrame !== 'undefined'
+    && XRFrame.prototype && 'detectedPlanes' in XRFrame.prototype;
+  feat.depth = typeof XRFrame !== 'undefined'
+    && XRFrame.prototype && typeof XRFrame.prototype.getDepthInformation === 'function';
 }
 
 function start(){
@@ -3283,18 +3845,21 @@ function start(){
     return Promise.reject(new Error('no webgl'));
   }
 
-  var opts = { requiredFeatures: ['hit-test'] };
+  var opts = {
+    requiredFeatures: ['hit-test'],
+    optionalFeatures: ['anchors', 'plane-detection', 'depth-sensing',
+                       'light-estimation']
+  };
   if(overlay){
-    opts.optionalFeatures = ['dom-overlay', 'depth-sensing'];
+    opts.optionalFeatures = opts.optionalFeatures.concat(['dom-overlay']);
     opts.domOverlay = { root: overlay };
-    /* where the phone has a depth sensor, hit tests land far better on
-       featureless cardboard; ignored where it does not */
-    opts.depthSensing = { usagePreference: ['cpu-optimized'],
-                          dataFormatPreference: ['luminance-alpha'] };
   }
+  opts.depthSensing = { usagePreference: ['cpu-optimized'],
+                        dataFormatPreference: ['luminance-alpha', 'float32'] };
 
   return navigator.xr.requestSession('immersive-ar', opts).then(function(s){
     session = s;
+    noteFeatures(s);
     overlay.classList.add('show');
     document.body.classList.add('ar-active');
     s.addEventListener('end', function(){
@@ -3309,9 +3874,14 @@ function start(){
       localSpace = space;
       return s.requestReferenceSpace('viewer');
     }).then(function(viewer){
+      viewerSpace = viewer;
       return s.requestHitTestSource({ space: viewer });
     }).then(function(src){
       hitSource = src;
+      if(typeof s.requestLightProbe === 'function'){
+        s.requestLightProbe().then(function(probe){ lightProbe = probe; },
+                                   function(){ lightProbe = null; });
+      }
       render();
       s.requestAnimationFrame(onFrame);
     });
@@ -3338,11 +3908,23 @@ APP.Measure = {
     return { hasA: !!pointA, hasB: !!pointB, mode: mode,
              metres: r ? r.value : null, takes: takes.length,
              tracking: !!current, steady: steady, spread: spread,
-             open: !!session };
+             open: !!session,
+             ready: warm.ready, features: feat, method: currentMethod(),
+             floor: floorPlane ? floorPlane.y : null,
+             top: topPlane ? topPlane.y : null,
+             depthGap: depthGap,
+             anchored: !!(pointA && pointA.anchor),
+             ambient: ambient, dark: tooDark(), range: aimRange(),
+             confidence: confidenceCm(),
+             calibrated: !!(APP.Calib && APP.Calib.active()),
+             factor: (APP.Calib && APP.Calib.factor()) || 1 };
   },
   _test: {
     dist3: dist3, vertical: vertical, horizontal: horizontal,
-    median: median, project: project, problem: problem
+    median: median, project: project, problem: problem,
+    polyArea: polyArea, polyHas: polyHas, polyNear: polyNear,
+    polyEdgeGap: polyEdgeGap, applyMat: applyMat, confidenceCm: confidenceCm,
+    forceWarm: function(){ warm.ready = true; }
   }
 };
 })();
@@ -3500,13 +4082,27 @@ function buildFields(){
     inp.addEventListener('keydown', function(e){
       if(e.key === 'Enter'){
         e.preventDefault();
-        var fast = burst.count >= 4 && (Date.now() - burst.start) / burst.count < 45;
-        commitTyped(def.key, fast ? 'Scanner (keyboard)' : 'Manual');
+        var per = burst.count > 1 ? (Date.now() - burst.start) / (burst.count - 1) : 9999;
+        var fast = burst.count >= WEDGE_MIN && per < WEDGE_GAP_MS;
         burst = { start: 0, count: 0 };
-        var next = FIELDS[idx + 1];
-        var hidden = next && idx + 1 >= 2 && !$('manifestPanel').classList.contains('open');
-        if(next && !hidden) $('in_' + next.key).focus();
-        else $('palletCount').focus();
+        if(fast){
+          markHid(Math.round(per));
+          var raw = clean(inp.value).toUpperCase();
+          if(raw.indexOf(CMD_PREFIX) === 0){
+            inp.value = state[def.key].value || '';
+            runCommand(raw);
+            return;
+          }
+          if(isRepeat(raw)){
+            feedback('dup');
+            inp.value = state[def.key].value || '';
+            toast('Same code twice — ignored', true);
+            return;                     /* stay put, waiting for the real next code */
+          }
+          noteScan(raw);
+        }
+        commitTyped(def.key, fast ? 'Scanner (Bluetooth)' : 'Manual');
+        advanceFrom(idx);
         return;
       }
       if(e.key.length === 1){
@@ -3525,6 +4121,847 @@ function buildFields(){
   });
 }
 
+
+/* ---------------- Bluetooth HID scanner (keyboard wedge) ----------------
+   The NT-1200 and every scanner like it present themselves as a keyboard:
+   the barcode is typed at machine speed and finished with Enter. So the
+   characters land wherever focus happens to be, which - with the gun in one
+   hand and the phone in the other - is usually nowhere at all.
+
+   Anything arriving faster than a person can type, while focus is not in a
+   text box, is therefore treated as a scan and routed to the next empty
+   manifest field.                                                        */
+
+var WEDGE_GAP_MS = 60;     /* nobody types a character every 60 ms        */
+var WEDGE_MIN    = 3;      /* shortest burst worth believing              */
+var WEDGE_IDLE   = 600;    /* a gap this long starts a fresh code         */
+var DUP_MS       = 1200;   /* a second trigger pull inside this is a dup  */
+
+var wedge    = { buf: '', first: 0, last: 0 };
+var lastScan = { value: '', at: 0 };
+var hidSeen  = false;
+
+/* One trigger pull can register twice. Whichever path the code arrives by,
+   the same value inside DUP_MS is the same pull. */
+function isRepeat(v){
+  return !!v && v === lastScan.value && (Date.now() - lastScan.at) < DUP_MS;
+}
+function noteScan(v){ lastScan = { value: v, at: Date.now() }; }
+
+function hidFlagKey(){ return 'pt_hid_seen'; }
+function loadHidFlag(){
+  try { hidSeen = localStorage.getItem(hidFlagKey()) === '1'; } catch(e){ hidSeen = false; }
+}
+function markHid(speed){
+  if(!hidSeen){
+    hidSeen = true;
+    try { localStorage.setItem(hidFlagKey(), '1'); } catch(e){}
+  }
+  var pill = $('wedgePill');
+  if(pill){
+    pill.classList.add('live');
+    $('wedgePillTxt').textContent = 'Scanner';
+  }
+  var when = APP.formatDateTime(new Date().toISOString());
+  var s2 = $('wedgeStatus2');
+  if(s2) s2.textContent = 'Bluetooth scanner active';
+  var l2 = $('wedgeLast2');
+  if(l2) l2.textContent = 'Last scan ' + when + (speed ? ' · ' + speed + ' ms/char' : '');
+  refreshKeypadChip();
+}
+
+function isTextEntry(n){
+  if(!n) return false;
+  var t = (n.tagName || '').toUpperCase();
+  if(t === 'TEXTAREA') return true;
+  if(t !== 'INPUT') return false;
+  var ty = (n.type || 'text').toLowerCase();
+  return ['text','number','search','tel','url','email','password','date'].indexOf(ty) >= 0;
+}
+function overlayOpen(){
+  return ['scanOverlay','arOverlay','modalBackdrop','kpBack'].some(function(id){
+    var n = $(id);
+    return n && n.offsetParent !== null;
+  });
+}
+function nextEmptyField(){
+  for(var i = 0; i < FIELDS.length; i++){
+    if(!state[FIELDS[i].key].value) return FIELDS[i];
+  }
+  return null;
+}
+
+/* Focus the field after idx. If it sits in the collapsed part of the panel,
+   park focus instead: the router below opens the panel only when a code
+   really lands there, which keeps collapsed-by-default honest. */
+function advanceFrom(idx){
+  var next = FIELDS[idx + 1];
+  if(next){
+    var visible = (idx + 1) < 2 || $('manifestPanel').classList.contains('open');
+    if(visible){
+      var inp = $('in_' + next.key);
+      if(inp){ try { inp.focus(); } catch(e){} return; }
+    }
+    try { if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch(e){}
+    return;
+  }
+  try { $('palletCount').focus(); } catch(e){}
+}
+
+function deliverScan(text, speed){
+  var v = clean(text).toUpperCase();
+  if(!v) return;
+  markHid(speed);
+  if(runCommand(v)) return;
+  if(isRepeat(v)){
+    feedback('dup');
+    toast('Same code twice — ignored', true);
+    lastScan.at = Date.now();
+    return;
+  }
+  noteScan(v);
+  var def = nextEmptyField();
+  if(!def){
+    feedback('reject');
+    toast('All ' + FIELDS.length + ' manifest fields are filled', true);
+    return;
+  }
+  var idx = FIELDS.indexOf(def);
+  if(idx >= 2) $('manifestPanel').classList.add('open');
+  setValue(def.key, v, 'Scanner (Bluetooth)', BC.detect(v), '');
+  feedback('ok');
+  toast(def.label + ' · ' + v);
+  advanceFrom(idx);
+}
+
+document.addEventListener('keydown', function(e){
+  if(e.ctrlKey || e.metaKey || e.altKey) return;
+  if(isTextEntry(e.target)) return;      /* a text box handles its own keys */
+  if(overlayOpen()) return;              /* camera, AR, modal or keypad open */
+  var now = Date.now();
+
+  if(e.key === 'Enter' || e.key === 'Tab'){
+    if(wedge.buf.length >= WEDGE_MIN){
+      e.preventDefault(); e.stopPropagation();
+      var txt = wedge.buf, span = wedge.last - wedge.first, n = txt.length;
+      wedge.buf = '';
+      deliverScan(txt, n > 1 ? Math.round(span / (n - 1)) : 0);
+    }
+    return;
+  }
+  if(e.key.length !== 1) return;
+  if(!wedge.buf || now - wedge.last > WEDGE_IDLE){ wedge.buf = ''; wedge.first = now; }
+  wedge.buf += e.key;
+  wedge.last = now;
+  e.preventDefault();
+}, true);
+
+/* ---------------- in-app keypad ----------------
+   Android suppresses the soft keyboard while an HID scanner is paired, so
+   every manual-entry box in this form becomes unusable. This replaces it. */
+
+/* Only a tap counts. The app focuses fields itself after every scan, and a
+   keypad that sprang up each time would cover the form. */
+var lastTap = { node: null, at: 0 };
+document.addEventListener('pointerdown', function(e){
+  lastTap = { node: e.target, at: Date.now() };
+}, true);
+
+function tappedJustNow(node){
+  if(!lastTap.node || Date.now() - lastTap.at > 600) return false;
+  return lastTap.node === node || (node.contains && node.contains(lastTap.node));
+}
+
+var KP_ROWS = ['1234567890', 'QWERTYUIOP', 'ASDFGHJKL', 'ZXCVBNM'];
+var kpTarget = null;
+
+function keypadMode(){
+  try { return localStorage.getItem('pt_keypad') || 'auto'; } catch(e){ return 'auto'; }
+}
+function setKeypadMode(v){
+  try { localStorage.setItem('pt_keypad', v); } catch(e){}
+  refreshKeypadChip();
+}
+function buildKeypad(){
+  var host = $('kpKeys');
+  if(!host || host.childNodes.length) return;
+  function key(txt, cls, fn){
+    var k = el('div', 'kp-k' + (cls ? ' ' + cls : ''), txt);
+    k.addEventListener('mousedown', function(ev){ ev.preventDefault(); });
+    k.addEventListener('click', fn);
+    return k;
+  }
+  KP_ROWS.forEach(function(row){
+    var r = el('div', 'kp-row');
+    row.split('').forEach(function(ch){
+      r.appendChild(key(ch, null, function(){ kpInsert(ch); }));
+    });
+    host.appendChild(r);
+  });
+  var r = el('div', 'kp-row');
+  ['.', '-', '/', 'X'].forEach(function(ch){
+    r.appendChild(key(ch, 'dim', function(){ kpInsert(ch); }));
+  });
+  r.appendChild(key('space', 'wide dim', function(){ kpInsert(' '); }));
+  r.appendChild(key('⌫', 'dim', kpBack));
+  host.appendChild(r);
+
+  var r2 = el('div', 'kp-row');
+  r2.appendChild(key('Clear', 'dim', function(){ kpSet(''); }));
+  r2.appendChild(key('Done', 'wide go', closeKeypad));
+  host.appendChild(r2);
+}
+function kpShow(){
+  if(!kpTarget) return;
+  $('kpVal').textContent = kpTarget.value || ' ';
+}
+function kpInsert(ch){
+  if(!kpTarget) return;
+  if(kpTarget.type === 'number' && !/[0-9.\-]/.test(ch)) return;
+  kpTarget.value = (kpTarget.value || '') + ch;
+  fireInput(kpTarget); kpShow();
+}
+function kpBack(){
+  if(!kpTarget) return;
+  kpTarget.value = (kpTarget.value || '').slice(0, -1);
+  fireInput(kpTarget); kpShow();
+}
+function kpSet(v){
+  if(!kpTarget) return;
+  kpTarget.value = v;
+  fireInput(kpTarget); kpShow();
+}
+function fireInput(n){
+  try {
+    n.dispatchEvent(new Event('input', { bubbles: true }));
+  } catch(e){}
+}
+function openKeypad(input){
+  if(!input) return;
+  kpTarget = input;
+  buildKeypad();
+  $('kpLabel').textContent = keypadLabel(input);
+  $('kpBack').classList.add('show');
+  $('kpChip').classList.remove('show');
+  kpShow();
+}
+function closeKeypad(){
+  $('kpBack').classList.remove('show');
+  if(kpTarget){
+    try { kpTarget.dispatchEvent(new Event('change', { bubbles: true })); } catch(e){}
+  }
+  kpTarget = null;
+}
+function keypadLabel(input){
+  var id = input.id || '';
+  if(id === 'palletCountManual') return 'Pallet count';
+  if(id === 'stockHeight_manual') return 'Height cm';
+  if(id === 'palletSize_manual') return 'Pallet size';
+  if(id === 'remark_manual') return 'Remark';
+  if(id === 'recordSearch') return 'Search';
+  if(id.indexOf('mg_') === 0) return 'Merge type';
+  if(id.indexOf('in_') === 0) return 'Manifest';
+  return 'Entry';
+}
+function refreshKeypadChip(){
+  var chip = $('kpChip');
+  if(!chip) return;
+  var a = document.activeElement;
+  var on = isTextEntry(a) && keypadMode() !== 'off' && !overlayOpen()
+           && !(a.getAttribute && a.getAttribute('data-nokeypad'));
+  /* A manifest box is a scan target that auto-advance keeps focused, so it
+     only gets the chip when the user actually tapped it to edit by hand. */
+  if(on && a.id && a.id.indexOf('in_') === 0 && !tappedJustNow(a)) on = false;
+  chip.classList.toggle('show', !!on && !$('kpBack').classList.contains('show'));
+}
+
+document.addEventListener('focusin', function(e){
+  if(!isTextEntry(e.target)) return;
+  var mode = keypadMode();
+  var t = e.target;
+  if(t.getAttribute && t.getAttribute('data-nokeypad')){ refreshKeypadChip(); return; }
+  if((mode === 'always' || (mode === 'auto' && hidSeen)) && tappedJustNow(t)){
+    setTimeout(function(){ if(document.activeElement === t) openKeypad(t); }, 60);
+    return;
+  }
+  refreshKeypadChip();
+});
+document.addEventListener('focusout', function(){
+  setTimeout(refreshKeypadChip, 80);
+});
+
+function initWedge(){
+  loadHidFlag();
+  if(hidSeen){
+    var pill = $('wedgePill');
+    if(pill){ pill.classList.add('live'); $('wedgePillTxt').textContent = 'Scanner'; }
+    var s2 = $('wedgeStatus2');
+    if(s2) s2.textContent = 'Bluetooth scanner paired before on this device';
+  }
+  $('kpChip').addEventListener('click', function(){
+    var a = document.activeElement;
+    openKeypad(isTextEntry(a) ? a : null);
+  });
+  $('kpBack').addEventListener('click', function(e){
+    if(e.target === $('kpBack')) closeKeypad();
+  });
+
+  var sel = $('keypadMode');
+  sel.value = keypadMode();
+  sel.addEventListener('change', function(){ setKeypadMode(sel.value); });
+
+  /* Test box: show exactly what the scanner sent and how fast. */
+  var t = $('wedgeTest'), tb = { buf: '', first: 0, last: 0 };
+  t.addEventListener('keydown', function(e){
+    var now = Date.now();
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      var n = tb.buf.length, span = tb.last - tb.first;
+      var per = n > 1 ? Math.round(span / (n - 1)) : 0;
+      var fast = n >= WEDGE_MIN && per < WEDGE_GAP_MS;
+      $('wedgeTestOut').textContent = n
+        ? (fast ? 'Scanner · ' : 'Typed · ') + n + ' chars · ' + per
+          + ' ms/char · terminator OK · ' + tb.buf
+        : 'Nothing arrived';
+      if(fast) markHid(per);
+      tb = { buf: '', first: 0, last: 0 };
+      t.value = '';
+      return;
+    }
+    if(e.key.length !== 1) return;
+    if(!tb.buf || now - tb.last > WEDGE_IDLE){ tb.buf = ''; tb.first = now; }
+    tb.buf += e.key; tb.last = now;
+  });
+}
+APP.PTWedge = { deliverScan: deliverScan, nextEmptyField: nextEmptyField,
+                advanceFrom: advanceFrom, openKeypad: openKeypad,
+                closeKeypad: closeKeypad, isHidSeen: function(){ return hidSeen; } };
+
+
+/* ---------------- command barcodes ----------------
+   Anything beginning ## is an instruction, not a manifest. Printed on a
+   strip and taped to the clipboard, they let a whole delivery be recorded
+   with the gun alone: manifests, then the count, then SAVE.           */
+
+var CMD_PREFIX = '##';
+var COMMANDS = [
+  { code: '##SAVE',  cap: 'Save record',    run: function(){ save(); } },
+  { code: '##NEW',   cap: 'New / clear',    run: function(){ resetForm(true); toast('New record'); } },
+  { code: '##UNDO',  cap: 'Undo last scan', run: cmdUndo },
+  { code: '##SL',    cap: 'Size large',     run: function(){ writeChoice('palletSize', PALLET_SIZES[0]); toast('Size ' + PALLET_SIZES[0]); } },
+  { code: '##SS',    cap: 'Size small',     run: function(){ writeChoice('palletSize', PALLET_SIZES[1]); toast('Size ' + PALLET_SIZES[1]); } },
+  { code: '##RL',    cap: 'Remark latest',  run: function(){ writeChoice('remark', REMARK_OPTIONS[0]); toast(REMARK_OPTIONS[0]); } },
+  { code: '##RW',    cap: 'Remark wrong',   run: function(){ writeChoice('remark', REMARK_OPTIONS[1]); toast(REMARK_OPTIONS[1]); } },
+  { code: '##MF',    cap: 'Merge full',     run: function(){ cmdMerge(MERGE_OPTIONS[0]); } },
+  { code: '##MP',    cap: 'Merge partial',  run: function(){ cmdMerge(MERGE_OPTIONS[1]); } }
+];
+/* counts 1-20 and a few heights get their own printed cells */
+for(var ci = 1; ci <= 20; ci++) COMMANDS.push({ code: '##C' + ci, cap: 'Count ' + ci, count: ci });
+
+function lastFilled(){
+  var found = null;
+  FIELDS.forEach(function(d){ if(state[d.key].value) found = d; });
+  return found;
+}
+function cmdUndo(){
+  var d = lastFilled();
+  if(!d){ toast('Nothing to undo', true); return; }
+  clearField(d.key);
+  lastScan = { value: '', at: 0 };
+  toast('Cleared ' + d.label);
+}
+function cmdMerge(mode){
+  var d = null;
+  FIELDS.forEach(function(x){ if(x.merged && state[x.key].value) d = x; });
+  if(!d){ toast('No merged manifest scanned yet', true); return; }
+  writeChoice('mg_' + d.key, mode);
+  toast(d.label + ' ' + '·' + ' ' + mode);
+}
+
+/* Returns true when the text was a command and has been carried out. */
+function runCommand(text){
+  var v = String(text == null ? '' : text).trim().toUpperCase().replace(/\s+/g, '');
+  if(v.indexOf(CMD_PREFIX) !== 0) return false;
+  var body = v.slice(2);
+
+  var exact = COMMANDS.filter(function(c){ return c.code === v; })[0];
+  if(exact){
+    feedback('ok');
+    if(exact.count != null){ writePalletCount(String(exact.count)); toast('Pallet count ' + exact.count); }
+    else exact.run();
+    return true;
+  }
+  var m = body.match(/^C(\d{1,3})$/);
+  if(m){ feedback('ok'); writePalletCount(m[1]); toast('Pallet count ' + m[1]); return true; }
+  m = body.match(/^H(\d{1,3})$/);
+  if(m){ feedback('ok'); writeChoice('stockHeight', m[1]); toast('Stock height ' + m[1] + ' cm'); return true; }
+  m = body.match(/^E:(.+)$/);
+  if(m){
+    var hit = Lists.get('dc').filter(function(r){
+      return String(r.empId).toUpperCase() === m[1] || String(r.name).toUpperCase() === m[1];
+    })[0];
+    if(!hit){ feedback('reject'); toast('No DC employee ' + m[1], true); return true; }
+    feedback('ok'); selectDc(hit.empId); toast('DC employee ' + hit.name);
+    return true;
+  }
+  feedback('reject');
+  toast('Unknown command ' + v, true);
+  return true;
+}
+
+/* ---------------- scan feedback ----------------
+   Three outcomes need three sounds, because the stack is what you are
+   looking at, not the phone. */
+function feedback(kind){
+  try {
+    if(navigator.vibrate){
+      navigator.vibrate(kind === 'ok' ? 90 : kind === 'dup' ? [60, 70, 60] : 320);
+    }
+  } catch(e){}
+  tone(kind);
+  APP.flash();
+}
+function tone(kind){
+  var ctx = APP.audioContext && APP.audioContext();
+  if(!ctx) return;
+  var plan = kind === 'ok'   ? [[1046, 0, 0.09], [1568, 0.07, 0.09]]
+           : kind === 'dup'  ? [[880, 0, 0.07], [880, 0.13, 0.07]]
+           :                   [[300, 0, 0.33]];
+  plan.forEach(function(step){
+    try {
+      var t = ctx.currentTime + step[1];
+      var osc = ctx.createOscillator(), g = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(step[0], t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.3, t + 0.012);
+      g.gain.setValueAtTime(0.3, t + step[2] * 0.7);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + step[2]);
+      osc.connect(g); g.connect(ctx.destination);
+      osc.start(t); osc.stop(t + step[2] + 0.02);
+    } catch(e){}
+  });
+}
+
+/* ---------------- draft autosave ----------------
+   A delivery in progress lived only in memory. A flat battery, an evicted
+   tab or a stray back gesture took ten scans with it. */
+var DRAFT_KEY = 'pt_draft_v1';
+var draftTimer = null;
+
+function draftWorthKeeping(rec){
+  if(!rec) return false;
+  if(rec.manifestCount) return true;
+  return !!(rec.remark || (rec.palletCount !== '' && rec.palletCount != null)
+            || (rec.stockHeight && rec.stockHeight !== STOCK_HEIGHT_DEFAULT));
+}
+function saveDraftNow(){
+  try {
+    if(editingId){ localStorage.removeItem(DRAFT_KEY); return; }
+    var rec = collect();
+    if(!draftWorthKeeping(rec)){ localStorage.removeItem(DRAFT_KEY); return; }
+    rec.__draftAt = new Date().toISOString();
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(rec));
+  } catch(e){}
+}
+function scheduleDraftSave(){
+  if(draftTimer) clearTimeout(draftTimer);
+  draftTimer = setTimeout(saveDraftNow, 400);
+}
+function clearDraft(){
+  if(draftTimer){ clearTimeout(draftTimer); draftTimer = null; }
+  try { localStorage.removeItem(DRAFT_KEY); } catch(e){}
+}
+function readDraft(){
+  try {
+    var raw = localStorage.getItem(DRAFT_KEY);
+    if(!raw) return null;
+    var rec = JSON.parse(raw);
+    return draftWorthKeeping(rec) ? rec : null;
+  } catch(e){ return null; }
+}
+function offerDraft(){
+  var d = readDraft();
+  if(!d) return;
+  var when = d.__draftAt ? APP.formatDateTime(d.__draftAt) : 'earlier';
+  APP.confirmModal('Unfinished delivery',
+    'A delivery was left in progress at ' + when + ' with ' + (d.manifestCount || 0)
+    + ' manifest' + ((d.manifestCount === 1) ? '' : 's')
+    + ' scanned. Carry on with it?', 'Carry on').then(function(ok){
+    if(!ok){ clearDraft(); return; }
+    var id = d.id;
+    loadRecord(d);
+    editingId = null;              /* a draft is a new record, not an edit */
+    editingCreatedAt = null;
+    setEditingChrome(null);
+    toast('Delivery restored');
+  });
+}
+
+/* ---------------- custom export layout ----------------
+   The MB51 inbound workbook has its own column order. Rather than guess
+   it, take its header row and map each column to a field. */
+var LAYOUT_KEY = 'pt_layout_v1';
+
+function readLayout(){
+  try {
+    var raw = localStorage.getItem(LAYOUT_KEY);
+    if(!raw) return null;
+    var o = JSON.parse(raw);
+    return (o && o.cols && o.cols.length) ? o : null;
+  } catch(e){ return null; }
+}
+function writeLayout(o){
+  try {
+    if(o) localStorage.setItem(LAYOUT_KEY, JSON.stringify(o));
+    else localStorage.removeItem(LAYOUT_KEY);
+  } catch(e){}
+  refreshLayoutDesc();
+}
+function refreshLayoutDesc(){
+  var o = readLayout(), n = $('layoutDesc');
+  if(!n) return;
+  n.textContent = o
+    ? o.name + ' ' + '·' + ' ' + o.cols.length + ' columns'
+    : 'Match your own workbook columns ' + '·' + ' none saved yet';
+  var b = $('layoutBtn');
+  if(b) b.textContent = o ? 'Edit' : 'Set up';
+}
+function guessSource(header){
+  var want = normHeader(header);
+  if(!want) return '';
+  var cols = exportColumns();
+  for(var i = 0; i < cols.length; i++) if(normHeader(cols[i]) === want) return cols[i];
+  /* a looser pass: the workbook may call it "Pallet Qty" or "Inbound Date" */
+  var alias = [
+    [/^(qty|quantity|pallets?|palletqty|palletcount|physicalpallets?)$/, 'Physical Pallet Count'],
+    [/^(date|inbounddate|workdate|deliverydate|postingdate)$/, 'Date of Work'],
+    [/^(employee|user|scannedby|operator|empname)$/, 'DC Employee Name'],
+    [/^(empid|employeeid|userid|personnelno)$/, 'DC Employee ID'],
+    [/^(manifest|basemanifest|manifestno|document|deliveryno)$/, 'Base Pallet Manifest'],
+    [/^(height|stockheight|palletheight)$/, 'Actual Pallet Stock Height cm'],
+    [/^(size|palletsize|mastersize)$/, 'Master Pallet Size cm'],
+    [/^(remark|remarks|note|notes|comment)$/, 'Remark']
+  ];
+  for(var a = 0; a < alias.length; a++) if(alias[a][0].test(want)) return alias[a][1];
+  return '';
+}
+function layoutRows(){
+  var o = readLayout();
+  if(!o) return null;
+  var cols = exportColumns();
+  var head = o.cols.map(function(c){ return c.header; });
+  var rows = [head];
+  records.forEach(function(r){
+    var full = recordRow(r);
+    rows.push(o.cols.map(function(c){
+      if(!c.src) return '';
+      var i = cols.indexOf(c.src);
+      return i < 0 ? '' : full[i];
+    }));
+  });
+  return rows;
+}
+function exportLayout(fmt){
+  var rows = layoutRows();
+  if(!rows){ toast('Set up a layout first', true); return; }
+  if(!records.length){ toast('Nothing to export', true); return; }
+  var o = readLayout();
+  APP.writeTable(rows, (o.name || 'layout').replace(/[^A-Za-z0-9_-]+/g, '_') + '_'
+                 + APP.todayISO(), fmt, 'Pallet Tally');
+  toast(records.length + ' records exported ' + '·' + ' ' + o.name);
+}
+
+
+
+/* ---------------- camera calibration against the DISTO ----------------
+   The two numbers arrive seconds apart for the same pallet, so the pairing
+   needs no extra step from the user beyond saying yes. */
+var pendingCam = null;             /* {raw metres, at ms} */
+var CAL_WINDOW = 15 * 60 * 1000;
+
+function refreshCalib(){
+  var C = APP.Calib;
+  var n = C.count(), f = C.factor();
+  var st = $('calibStatus'), det = $('calibDetail');
+  if(!st) return;
+  st.textContent = C.active()
+    ? 'Calibrated ×' + f.toFixed(3) + ' from ' + n + ' DISTO pair' + (n === 1 ? '' : 's')
+    : (n ? n + ' pair' + (n === 1 ? '' : 's') + ' kept · two are needed before correcting'
+         : 'Not calibrated yet');
+  var ps = C.pairs();
+  det.textContent = ps.length
+    ? ps.slice(-4).map(function(p){
+        return Math.round(p.cam * 100) + '→' + Math.round(p.ref * 100);
+      }).join('  ·  ') + ' cm'
+    : '';
+}
+
+function offerCalibration(refM){
+  if(!pendingCam) return;
+  if(Date.now() - pendingCam.at > CAL_WINDOW){ pendingCam = null; return; }
+  var cam = pendingCam.raw;
+  pendingCam = null;
+  if(!(cam > 0.05) || !(refM > 0.05)) return;
+  var ratio = refM / cam;
+  if(ratio < 0.5 || ratio > 2) return;                 /* a mis-aim, not a scale */
+  if(Math.abs(refM - cam) < 0.01) return;              /* already agreeing */
+  APP.confirmModal('Calibrate the camera',
+    'The camera measured ' + Math.round(cam * 100) + ' cm and the DISTO says '
+    + Math.round(refM * 100) + ' cm for this pallet. Keep the pair so camera '
+    + 'measuring learns your phone’s scale?', 'Keep it').then(function(ok){
+    if(!ok) return;
+    if(APP.Calib.add(cam, refM)){
+      refreshCalib();
+      APP.toast(APP.Calib.active()
+        ? 'Calibrated ×' + APP.Calib.factor().toFixed(3)
+        : 'Pair kept · one more and correcting starts');
+    }
+  });
+}
+
+function addPairByHand(){
+  var wrap = el('div');
+  var n = el('div', 'note');
+  n.innerHTML = 'Enter what the camera said and what it really is, both in cm. '
+    + 'Use the DISTO or a tape for the true figure.';
+  wrap.appendChild(n);
+  function num(id, ph){
+    var i = document.createElement('input');
+    i.type = 'number'; i.id = id; i.className = 'wedge-test'; i.placeholder = ph;
+    i.setAttribute('inputmode', 'numeric');
+    i.style.marginTop = '8px';
+    wrap.appendChild(i);
+    return i;
+  }
+  var a = num('calCam', 'Camera reading in cm');
+  var b = num('calRef', 'True measurement in cm');
+  APP.showModal({ title: 'Add a calibration pair', node: wrap, okText: 'Keep pair',
+    validate: function(){
+      var x = Number(a.value), y = Number(b.value);
+      if(!(x > 5) || !(y > 5)) return 'Enter both figures in cm';
+      if(y / x < 0.5 || y / x > 2) return 'Those are too far apart to be a scale error';
+      return '';
+    } }).then(function(ok){
+    if(!ok) return;
+    if(APP.Calib.add(Number(a.value) / 100, Number(b.value) / 100)){
+      refreshCalib();
+      APP.toast(APP.Calib.active()
+        ? 'Calibrated ×' + APP.Calib.factor().toFixed(3) : 'Pair kept');
+    }
+  });
+}
+
+function initCalib(){
+  $('calibAdd').addEventListener('click', addPairByHand);
+  $('calibReset').addEventListener('click', function(){
+    if(!APP.Calib.count()){ APP.toast('Nothing to reset', true); return; }
+    APP.confirmModal('Reset calibration',
+      'Throw away all ' + APP.Calib.count() + ' pairs and stop correcting camera '
+      + 'readings?', 'Reset').then(function(ok){
+      if(!ok) return;
+      APP.Calib.reset(); refreshCalib(); APP.toast('Calibration cleared');
+    });
+  });
+  refreshCalib();
+}
+
+/* ---------------- printable command sheet ---------------- */
+function openCommandSheet(){
+  var wrap = el('div');
+  var intro = el('div', 'note');
+  intro.innerHTML = 'Print this and keep it with the clipboard. Scanning any of these '
+    + 'with the NETUM acts on the form instead of filling a manifest. '
+    + 'Scan the manifests, scan the count, scan <b>Save record</b>.';
+  wrap.appendChild(intro);
+
+  var sheet = el('div', 'cmd-sheet');
+  var grid = el('div', 'cmd-grid');
+  COMMANDS.forEach(function(c){
+    var cell = el('div', 'cmd-cell');
+    cell.appendChild(el('div', 'cap', c.cap));
+    var holder = el('div');
+    try { holder.innerHTML = BC.svg(c.code, 'Code 128'); }
+    catch(e){ holder.textContent = c.code; }
+    cell.appendChild(holder);
+    cell.appendChild(el('div', 'cod', c.code));
+    grid.appendChild(cell);
+  });
+  sheet.appendChild(grid);
+  wrap.appendChild(sheet);
+
+  var more = el('div', 'note');
+  more.innerHTML = 'Codes not printed here work too: <b>##C&lt;n&gt;</b> sets any pallet count, '
+    + '<b>##H&lt;n&gt;</b> sets the stock height in cm, <b>##E:&lt;id&gt;</b> picks a DC employee '
+    + 'by ID or name. Make your own with any barcode generator.';
+  wrap.appendChild(more);
+
+  APP.showModal({ title: 'Command barcodes', node: wrap,
+                  okText: 'Print', cancelText: 'Close' }).then(function(go){
+    if(go) setTimeout(function(){ try { window.print(); } catch(e){} }, 60);
+  });
+}
+
+/* ---------------- export layout builder ---------------- */
+function openLayoutBuilder(){
+  var cols = exportColumns();
+  var saved = readLayout();
+  var wrap = el('div');
+
+  var note = el('div', 'note');
+  note.innerHTML = 'Paste the header row straight from your workbook '
+    + '&mdash; the whole row, tabs or commas. Each column is matched to a field; '
+    + 'correct anything it got wrong, then save.';
+  wrap.appendChild(note);
+
+  var nameRow = el('div', 'laser-row');
+  var nameIn = document.createElement('input');
+  nameIn.type = 'text'; nameIn.id = 'layoutName'; nameIn.className = 'wedge-test';
+  nameIn.placeholder = 'Layout name, e.g. MB51 Inbound';
+  nameIn.value = saved ? saved.name : '';
+  nameRow.appendChild(nameIn);
+  wrap.appendChild(nameRow);
+
+  var paste = document.createElement('textarea');
+  paste.id = 'layoutPaste';
+  paste.className = 'wedge-test';
+  paste.rows = 2;
+  paste.placeholder = 'Paste the header row here';
+  paste.style.marginTop = '9px';
+  wrap.appendChild(paste);
+
+  var btnRow = el('div', 'laser-row');
+  btnRow.style.marginTop = '9px';
+  var readBtn = el('button', 'btn small primary', 'Match columns');
+  readBtn.type = 'button';
+  btnRow.appendChild(readBtn);
+  var clearBtn = el('button', 'btn small ghost', 'Remove layout');
+  clearBtn.type = 'button';
+  btnRow.appendChild(clearBtn);
+  wrap.appendChild(btnRow);
+
+  var host = el('div');
+  host.id = 'layoutHost';
+  host.style.marginTop = '10px';
+  wrap.appendChild(host);
+
+  function draw(list){
+    host.innerHTML = '';
+    if(!list.length){
+      var n = el('div', 'map-none', 'No columns yet. Paste a header row above.');
+      host.appendChild(n);
+      return;
+    }
+    var tbl = document.createElement('table');
+    tbl.className = 'map-tbl';
+    list.forEach(function(c, i){
+      var tr = document.createElement('tr');
+      var td1 = document.createElement('td');
+      td1.className = 'h'; td1.textContent = c.header;
+      tr.appendChild(td1);
+      var td2 = document.createElement('td');
+      var sel = document.createElement('select');
+      sel.setAttribute('data-i', String(i));
+      var blank = document.createElement('option');
+      blank.value = ''; blank.textContent = '— leave blank —';
+      sel.appendChild(blank);
+      cols.forEach(function(name){
+        var o = document.createElement('option');
+        o.value = name; o.textContent = name;
+        sel.appendChild(o);
+      });
+      sel.value = c.src || '';
+      sel.addEventListener('change', function(){ list[i].src = sel.value; });
+      td2.appendChild(sel);
+      tr.appendChild(td2);
+      tbl.appendChild(tr);
+    });
+    host.appendChild(tbl);
+  }
+
+  var working = saved ? saved.cols.slice() : [];
+  draw(working);
+
+  readBtn.addEventListener('click', function(){
+    var raw = paste.value.replace(/\r/g, '').split('\n')[0] || '';
+    var parts = raw.indexOf('\t') >= 0 ? raw.split('\t') : APP.parseCsv(raw)[0] || [];
+    parts = parts.map(function(x){ return String(x == null ? '' : x).trim(); })
+                 .filter(function(x){ return x !== ''; });
+    if(!parts.length){ toast('No headers found in that row', true); return; }
+    working = parts.map(function(hd){ return { header: hd, src: guessSource(hd) }; });
+    draw(working);
+    var hit = working.filter(function(c){ return c.src; }).length;
+    toast(working.length + ' columns ' + '·' + ' ' + hit + ' matched automatically');
+  });
+  clearBtn.addEventListener('click', function(){
+    working = [];
+    draw(working);
+    toast('Layout cleared — press Save to confirm');
+  });
+
+  APP.showModal({ title: 'Custom export layout', node: wrap, okText: 'Save layout',
+    validate: function(){
+      if(working.length && !nameIn.value.trim()) return 'Give the layout a name';
+      return '';
+    }
+  }).then(function(ok){
+    if(!ok) return;
+    if(!working.length){ writeLayout(null); toast('Layout removed'); return; }
+    writeLayout({ name: nameIn.value.trim(), cols: working });
+    toast('Layout saved ' + '·' + ' ' + working.length + ' columns');
+  });
+}
+
+function exportLayoutPick(){
+  if(!readLayout()){ openLayoutBuilder(); return; }
+  var wrap = el('div');
+  var o = readLayout();
+  var n = el('div', 'note');
+  n.innerHTML = '<b>' + APP.escapeHtml(o.name) + '</b> ' + '·' + ' '
+    + o.cols.length + ' columns. Export in this shape, or edit the mapping.';
+  wrap.appendChild(n);
+  var row = el('div', 'laser-row');
+  row.style.marginTop = '4px';
+  ['csv', 'xlsx', 'txt'].forEach(function(fmt){
+    var b = el('button', 'btn small primary', fmt.toUpperCase());
+    b.type = 'button';
+    b.addEventListener('click', function(){ $('modalCancel').click(); exportLayout(fmt); });
+    row.appendChild(b);
+  });
+  var edit = el('button', 'btn small ghost', 'Edit mapping');
+  edit.type = 'button';
+  edit.addEventListener('click', function(){
+    $('modalCancel').click();
+    setTimeout(openLayoutBuilder, 60);
+  });
+  row.appendChild(edit);
+  wrap.appendChild(row);
+  APP.showModal({ title: 'Custom layout', node: wrap, hideOk: true, cancelText: 'Close' });
+}
+
+/* ---------------- wiring ---------------- */
+function initV16(){
+  $('cmdSheetBtn').addEventListener('click', openCommandSheet);
+  $('layoutBtn').addEventListener('click', exportLayoutPick);
+  refreshLayoutDesc();
+
+  /* Any change to the count form is worth keeping. */
+  var screen = document.querySelector('[data-screen="count"]');
+  ['input', 'change'].forEach(function(ev){
+    screen.addEventListener(ev, scheduleDraftSave, true);
+  });
+  window.addEventListener('pagehide', saveDraftNow);
+  document.addEventListener('visibilitychange', function(){
+    if(document.visibilityState === 'hidden') saveDraftNow();
+  });
+}
+APP.PTCalib = { refresh: refreshCalib, offer: offerCalibration,
+                setPending: function(m){ pendingCam = { raw: m, at: Date.now() }; } };
+APP.PTV16 = { runCommand: runCommand, COMMANDS: COMMANDS, feedback: feedback,
+              saveDraftNow: saveDraftNow, readDraft: readDraft, clearDraft: clearDraft,
+              offerDraft: offerDraft, readLayout: readLayout, writeLayout: writeLayout,
+              guessSource: guessSource, layoutRows: layoutRows, exportLayout: exportLayout };
+
 function scanInto(def){
   APP.openScanner({
     title: def.label,
@@ -3533,14 +4970,12 @@ function scanInto(def){
     onHit: function(text, result){
       var v = clean(text).toUpperCase();
       if(!v){ APP.setScanMsg('That code holds no usable characters', 'err'); return false; }
+      if(v.indexOf(CMD_PREFIX) === 0){ runCommand(v); return true; }
       var label = APP.resultFormat(result);
       setValue(def.key, v, 'Camera', BC.fromScanner(label, v), label);
       toast(def.label + ' captured' + (label ? ' · ' + label : ''));
-      var idx = FIELDS.indexOf(def), next = FIELDS[idx + 1];
-      setTimeout(function(){
-        var hidden = next && idx + 1 >= 2 && !$('manifestPanel').classList.contains('open');
-        if(next && !hidden && !state[next.key].value) $('in_' + next.key).focus();
-      }, 50);
+      var idx = FIELDS.indexOf(def);
+      setTimeout(function(){ advanceFrom(idx); }, 50);
       return true;
     }
   });
@@ -3718,6 +5153,7 @@ function applyLaserReading(m){
   if($('laserLast2')) $('laserLast2').textContent = line;
   APP.toast('Stock height ' + cm + ' cm');
   if(Number(cm) > 600) APP.toast('That reading is over 6 m — check what you aimed at', true);
+  offerCalibration(m);
 }
 function setLaserUi(state, text){
   var connected = (state === 'connected' || state === 'lost');
@@ -3784,11 +5220,15 @@ function showLaserDiagnostics(){
 
 function initMeasure(){
   var M = APP.Measure, btn = $('arBtn');
-  M.onImport(function(cm, m, mode, takes){
+  M.onImport(function(cm, m, mode, takes, how, raw, factor){
     writeChoice('stockHeight', cm);
+    pendingCam = { raw: (raw != null ? raw : m), at: Date.now() };
     $('laserLast').textContent = 'Camera measured ' + m.toFixed(3) + ' m → ' + cm
       + ' cm (' + (mode === 'height' ? 'vertical' : 'straight line')
-      + (takes > 1 ? ', median of ' + takes : '') + ') · '
+      + (takes > 1 ? ', median of ' + takes : '')
+      + (how ? ', ' + how : '')
+      + (factor && factor !== 1 ? ', calibrated ×' + factor.toFixed(3) : '')
+      + ') · '
       + APP.formatDateTime(new Date().toISOString());
     APP.toast('Stock height ' + cm + ' cm from the camera');
   });
@@ -3998,6 +5438,7 @@ function resetForm(keepDateAndDc){
   refreshSummary();
   setEditingChrome(null);
   markClean();
+  clearDraft();
   document.querySelector('.screens').scrollTop = 0;
 }
 
@@ -4017,6 +5458,7 @@ function save(){
     return DB.putRecord(rec).then(reload).then(function(){
       collapsePanels();
       markClean();
+      clearDraft();
       toast((wasEdit ? 'Updated' : 'Saved') + ' · ' + rec.manifestCount + ' manifests · '
             + rec.palletCount + ' pallets');
       resetForm(true);
@@ -4449,6 +5891,9 @@ function init(){
   writeChoice('stockHeight', STOCK_HEIGHT_DEFAULT);
   initLaser();
   initMeasure();
+  initWedge();
+  initV16();
+  initCalib();
   $('palletSizeHost').appendChild(makeChoice('palletSize', PALLET_SIZES, 'Enter size in cm'));
   writeChoice('palletSize', PALLET_SIZE_DEFAULT);
   writePalletCount('');
@@ -4522,6 +5967,7 @@ function init(){
   }).then(function(){
     markClean();
     APP.ready = true;
+    setTimeout(offerDraft, 300);
   }).catch(function(e){
     console.error(e);
     toast('Storage unavailable: ' + e.message, true);

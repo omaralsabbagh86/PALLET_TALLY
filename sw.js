@@ -1,4 +1,4 @@
-const CACHE = 'pallet-tally-v14';
+const CACHE = 'pallet-tally-v18';
 const ASSETS = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
