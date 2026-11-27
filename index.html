@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#12161A">
-<title>Pallet Tally V22</title>
+<title>Pallet Tally V23</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -517,11 +517,13 @@ select:disabled,option:disabled{color:#5B646C;}
 .cmd-sheet{background:#fff;color:#000;padding:12px;border-radius:8px;}
 /* A scanner needs dark bars on a light field, so this one panel stays
    white however dark the rest of the app is. */
-.bt-code{background:#fff;border-radius:8px;padding:10px 12px 8px;margin-top:11px;
+.bt-code{background:#fff;border-radius:8px;padding:10px 8px 6px;margin:11px -13px 0;
   text-align:center;}
 .bt-code .cap{font-family:var(--cond);font-size:12.5px;font-weight:600;color:#000;
   letter-spacing:.03em;margin-bottom:5px;}
-.bt-code svg{width:100%;max-width:none;height:76px;display:block;margin:0 auto;}
+.bt-code svg{width:100%;max-width:none;height:auto;display:block;margin:0 auto;}
+.bt-code .cod{font-family:var(--mono);font-size:12px;color:#333;margin-top:5px;
+  letter-spacing:.06em;}
 .cmd-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;}
 .cmd-cell{border:1px solid #bbb;border-radius:6px;padding:7px 6px 5px;text-align:center;
   break-inside:avoid;}
@@ -657,7 +659,7 @@ body.ar-active .bottomnav{visibility:hidden;}
 <body>
 <div class="topbar">
   <div class="eyebrow"><span class="dot"></span> OFFLINE · LOCAL DEVICE STORAGE</div>
-  <h1 id="appTitle">Pallet Tally V22</h1>
+  <h1 id="appTitle">Pallet Tally V23</h1>
 </div>
 
 <div class="app-banner" id="appBanner">
@@ -889,13 +891,10 @@ body.ar-active .bottomnav{visibility:hidden;}
         <div class="bt-code" id="btTransmit">
           <div class="cap">Bluetooth Transmit</div>
           <div id="btTransmitBc"></div>
+          <div class="cod">%#IFSNO$4</div>
         </div>
         <div class="note" style="margin-top:10px;">
-          <b>What this barcode does.</b> It switches the NT-1200 out of its USB
-          dongle mode and into Bluetooth, so it pairs with this phone. Scan it,
-          check Bluetooth is on and the phone is in range, then press the trigger
-          to start the connection attempts &mdash; the blue light blinks while it
-          tries and goes solid once it is connected.
+          Activates Bluetooth pairing mode on the scanner so it can connect to this phone.
         </div>
         <div class="note" style="margin-top:12px;margin-bottom:0;">
           <b>First-time setup on the NT-1200</b><br>
@@ -1086,7 +1085,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 var APP = window.APP = {};
 
 /* ---------------- constants ---------------- */
-var APP_VERSION = 'V22';
+var APP_VERSION = 'V23';
 var MERGED_COUNT = 9;           // Merged Pallet Manifest 1..9
 var PALLET_COUNT_MAX = 40;      // Physical Pallet Count 0..40 (manual entry above)
 var QR_CHUNK = 700;             // characters of payload per QR code
@@ -4571,7 +4570,13 @@ function drawBtTransmit(){
   var host = $('btTransmitBc');
   if(!host) return;
   try {
-    host.innerHTML = BC.svg(BT_TRANSMIT, 'Code 128');
+    var s = BC.svg(BT_TRANSMIT, 'Code 128');
+    /* Drop the encoder's caption and the space it sat in: at full width it
+       scales up with the bars and swamps the panel. A fixed-size caption
+       goes underneath instead. */
+    s = s.replace(/<text[\s\S]*?<\/text>/g, '')
+         .replace(/viewBox="0 0 (\d+) \d+"/, 'viewBox="0 0 $1 64"');
+    host.innerHTML = s;
   } catch(e){
     host.textContent = BT_TRANSMIT;
   }
