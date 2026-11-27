@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#12161A">
-<title>Pallet Tally V21</title>
+<title>Pallet Tally V22</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./icon-192.png">
@@ -515,6 +515,13 @@ select:disabled,option:disabled{color:#5B646C;}
 .kp-k.dim{color:#9aa4ae;font-size:13px;}
 /* ---- command sheet + export layout builder ---- */
 .cmd-sheet{background:#fff;color:#000;padding:12px;border-radius:8px;}
+/* A scanner needs dark bars on a light field, so this one panel stays
+   white however dark the rest of the app is. */
+.bt-code{background:#fff;border-radius:8px;padding:10px 12px 8px;margin-top:11px;
+  text-align:center;}
+.bt-code .cap{font-family:var(--cond);font-size:12.5px;font-weight:600;color:#000;
+  letter-spacing:.03em;margin-bottom:5px;}
+.bt-code svg{width:100%;max-width:none;height:76px;display:block;margin:0 auto;}
 .cmd-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;}
 .cmd-cell{border:1px solid #bbb;border-radius:6px;padding:7px 6px 5px;text-align:center;
   break-inside:avoid;}
@@ -650,7 +657,7 @@ body.ar-active .bottomnav{visibility:hidden;}
 <body>
 <div class="topbar">
   <div class="eyebrow"><span class="dot"></span> OFFLINE · LOCAL DEVICE STORAGE</div>
-  <h1 id="appTitle">Pallet Tally V21</h1>
+  <h1 id="appTitle">Pallet Tally V22</h1>
 </div>
 
 <div class="app-banner" id="appBanner">
@@ -879,6 +886,17 @@ body.ar-active .bottomnav{visibility:hidden;}
             <option value="chip">Button only</option>
           </select>
         </div>
+        <div class="bt-code" id="btTransmit">
+          <div class="cap">Bluetooth Transmit</div>
+          <div id="btTransmitBc"></div>
+        </div>
+        <div class="note" style="margin-top:10px;">
+          <b>What this barcode does.</b> It switches the NT-1200 out of its USB
+          dongle mode and into Bluetooth, so it pairs with this phone. Scan it,
+          check Bluetooth is on and the phone is in range, then press the trigger
+          to start the connection attempts &mdash; the blue light blinks while it
+          tries and goes solid once it is connected.
+        </div>
         <div class="note" style="margin-top:12px;margin-bottom:0;">
           <b>First-time setup on the NT-1200</b><br>
           1. From the scanner's manual scan <b>Working via Bluetooth</b>, then <b>Basic Mode (HID)</b>.<br>
@@ -1068,7 +1086,7 @@ break;case"<bookViews":;case"<bookViews>":;case"</bookViews>":break;case"<workbo
 var APP = window.APP = {};
 
 /* ---------------- constants ---------------- */
-var APP_VERSION = 'V21';
+var APP_VERSION = 'V22';
 var MERGED_COUNT = 9;           // Merged Pallet Manifest 1..9
 var PALLET_COUNT_MAX = 40;      // Physical Pallet Count 0..40 (manual entry above)
 var QR_CHUNK = 700;             // characters of payload per QR code
@@ -4547,8 +4565,21 @@ document.addEventListener('focusout', function(){
   setTimeout(refreshKeypadChip, 80);
 });
 
+var BT_TRANSMIT = '%#IFSNO$4';     /* decoded from the NT-1200 manual */
+
+function drawBtTransmit(){
+  var host = $('btTransmitBc');
+  if(!host) return;
+  try {
+    host.innerHTML = BC.svg(BT_TRANSMIT, 'Code 128');
+  } catch(e){
+    host.textContent = BT_TRANSMIT;
+  }
+}
+
 function initWedge(){
   loadHidFlag();
+  drawBtTransmit();
   if(hidSeen){
     var pill = $('wedgePill');
     if(pill){ pill.classList.add('live'); $('wedgePillTxt').textContent = 'Scanner'; }
@@ -4590,7 +4621,7 @@ function initWedge(){
     tb.buf += e.key; tb.last = now;
   });
 }
-APP.PTWedge = { deliverScan: deliverScan, nextEmptyField: nextEmptyField,
+APP.PTWedge = { BT_TRANSMIT: BT_TRANSMIT, deliverScan: deliverScan, nextEmptyField: nextEmptyField,
                 advanceFrom: advanceFrom, openKeypad: openKeypad,
                 closeKeypad: closeKeypad, isHidSeen: function(){ return hidSeen; } };
 
